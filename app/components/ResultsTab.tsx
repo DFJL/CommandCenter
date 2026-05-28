@@ -727,8 +727,6 @@ export default function ResultsTab({ studies, savedUpdates = [] }: { studies: St
   const [tableSearch, setTableSearch] = useState('');
   const [clientTableFilter, setClientTableFilter] = useState('All');
   const [sortMode, setSortMode] = useState<'severity' | 'score'>('severity');
-  const [expandedClients, setExpandedClients] = useState<Set<string>>(new Set());
-  const [expandedStudy, setExpandedStudy] = useState<string | null>(null);
   const [downloadToast, setDownloadToast] = useState(false);
   const [focusedEntity, setFocusedEntity] = useState<{ type: 'client' | 'portfolio'; value: string } | null>(null);
   const [selectedStudy, setSelectedStudy] = useState<string | null>(null);
@@ -808,20 +806,11 @@ export default function ResultsTab({ studies, savedUpdates = [] }: { studies: St
     setFocusedEntity(null);
     setSelectedStudy(null);
     setGranularMode(false);
-    setExpandedStudy(null);
     setFsoFspFilter('All');
     setNlqActive(false);
     setNlqQuery('');
     setClientTableFilter('All');
     setTableSearch('');
-  };
-
-  const toggleClient = (client: string) => {
-    setExpandedClients((prev) => {
-      const next = new Set(prev);
-      if (next.has(client)) next.delete(client); else next.add(client);
-      return next;
-    });
   };
 
   const handleNlq = async (q?: string) => {
@@ -859,7 +848,7 @@ export default function ResultsTab({ studies, savedUpdates = [] }: { studies: St
 
   const QUICK_CHIPS = ['High-risk studies', 'Delayed studies', 'QC below 70%', 'Within 4 weeks of DBL'];
 
-  const activeStudyFilter = selectedStudy ?? expandedStudy;
+  const activeStudyFilter = selectedStudy;
 
   return (
     <div className="flex" style={{ minHeight: 'calc(100vh - 112px)' }}>
@@ -1049,7 +1038,7 @@ export default function ResultsTab({ studies, savedUpdates = [] }: { studies: St
           <div className="px-4 pb-3 flex items-center gap-2 pt-2 flex-wrap">
             <span className="text-xs" style={{ color: '#8892a4' }}>Sort:</span>
             {(['severity', 'score'] as const).map((mode) => (
-              <button key={mode} onClick={() => { setSortMode(mode); setExpandedClients(new Set(tableFiltered.map((s) => s.client))); }}
+              <button key={mode} onClick={() => setSortMode(mode)}
                 className="text-xs px-3 py-1 rounded font-medium"
                 style={{ background: sortMode === mode ? '#2ea55e' : 'rgba(255,255,255,0.05)', color: sortMode === mode ? '#fff' : '#8892a4' }}>
                 {mode === 'severity' ? 'Risk Severity' : 'Risk Score'}
@@ -1077,32 +1066,38 @@ export default function ResultsTab({ studies, savedUpdates = [] }: { studies: St
             {groupedByClient.length === 0 ? (
               <div className="px-4 py-8 text-center text-sm" style={{ color: '#8892a4' }}>No studies match the current filters.</div>
             ) : groupedByClient.map(({ client, studies: clientStudies }) => {
-              const isExpanded = expandedClients.has(client);
+              const isActive = focusedEntity?.type === 'client' && focusedEntity.value === client;
               const riskCounts = clientStudies.reduce((acc, s) => {
                 acc[s.risk_tier] = (acc[s.risk_tier] || 0) + 1;
                 return acc;
               }, {} as Record<string, number>);
               const cAvgProd = clientStudies.reduce((a, s) => a + s.prod_pct, 0) / clientStudies.length;
               const cAvgQc = clientStudies.reduce((a, s) => a + s.qc_pct, 0) / clientStudies.length;
+              const cTotalFail = clientStudies.reduce((a, s) => a + s.failed_qc, 0);
+              const cTotalDel = clientStudies.reduce((a, s) => a + s.total_del, 0);
+              const cFailPct = cTotalDel > 0 ? ((cTotalFail / cTotalDel) * 100).toFixed(1) : '0';
 
               return (
                 <div key={client} style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}>
                   <div
                     className="flex items-center gap-3 px-4 py-2.5 cursor-pointer"
                     onClick={() => {
-                      toggleClient(client);
                       setFocusedEntity((prev) => prev?.type === 'client' && prev.value === client ? null : { type: 'client', value: client });
                       setSelectedStudy(null);
+                      setGranularMode(false);
                     }}
-                    style={{ background: focusedEntity?.value === client ? 'rgba(46,165,94,0.08)' : isExpanded ? 'rgba(46,165,94,0.04)' : 'transparent' }}
+                    style={{ background: isActive ? 'rgba(46,165,94,0.08)' : 'transparent' }}
                   >
-                    <span className="text-xs font-bold w-4" style={{ color: '#3b82f6' }}>{isExpanded ? '▼' : '▶'}</span>
+                    <span className="text-xs font-bold w-4" style={{ color: '#3b82f6' }}>{isActive ? '▼' : '▶'}</span>
                     <span className="text-sm font-medium flex-1 min-w-0 truncate" style={{ color: '#e8eaf0' }}>{client}</span>
                     <span className="text-xs flex-shrink-0" style={{ color: '#8892a4' }}>{clientStudies.length} {clientStudies.length === 1 ? 'study' : 'studies'}</span>
                     <span className="text-xs flex-shrink-0" style={{ color: '#8892a4' }}>
                       <span style={{ color: '#2ea55e' }}>Prod {cAvgProd.toFixed(0)}%</span>
                       {' | '}
                       <span style={{ color: '#3b82f6' }}>QC {cAvgQc.toFixed(0)}%</span>
+                      {cTotalFail > 0 && (
+                        <span className="ml-2" style={{ color: '#ef4444' }}>{cTotalFail} fail ({cFailPct}%)</span>
+                      )}
                     </span>
                     <div className="flex items-center gap-1 flex-shrink-0">
                       {(['Critical', 'High', 'Elevated', 'Moderate', 'Low'] as const).filter((t) => riskCounts[t]).map((tier) => (
@@ -1112,48 +1107,6 @@ export default function ResultsTab({ studies, savedUpdates = [] }: { studies: St
                       ))}
                     </div>
                   </div>
-
-                  {isExpanded && clientStudies.map((study) => {
-                    const eTier = effectiveTier(study, savedUpdates);
-                    const bump = savedUpdates.find((u) => u.study === study.study)?.riskBump ?? 0;
-                    const ms = nextUpcomingMilestone(study, savedUpdates);
-                    return (
-                      <div key={study.study}>
-                        <div
-                          className="flex items-center gap-3 px-4 py-2 cursor-pointer border-t"
-                          style={{ borderColor: 'rgba(255,255,255,0.04)', background: expandedStudy === study.study ? 'rgba(59,130,246,0.04)' : 'rgba(255,255,255,0.015)', paddingLeft: '2.5rem' }}
-                          onClick={() => setExpandedStudy(expandedStudy === study.study ? null : study.study)}
-                        >
-                          <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${RISK_STYLES[eTier]}`}>
-                            {RISK_EMOJI[eTier]} {eTier}
-                          </span>
-                          {bump > 0 && <span className="text-xs flex-shrink-0 font-medium" style={{ color: '#ef4444' }}>+{(bump * 100).toFixed(0)}%</span>}
-                          {ms && <span className="text-xs flex-shrink-0" title={ms.type} style={{ color: '#8892a4' }}>📅 {ms.date}</span>}
-                          <span className="text-sm flex-1 min-w-0 truncate" style={{ color: '#e8eaf0' }}>{study.study}</span>
-                          <span className="text-xs flex-shrink-0" style={{ color: '#8892a4' }}>{study.ta}</span>
-                          <span className="text-xs flex-shrink-0 px-1.5 py-0.5 rounded" style={{ background: study.fso_fsp === 'FSO' ? 'rgba(46,165,94,0.1)' : 'rgba(59,130,246,0.1)', color: study.fso_fsp === 'FSO' ? '#2ea55e' : '#3b82f6' }}>{study.fso_fsp}</span>
-                          <div className="flex items-center gap-2 flex-shrink-0 w-48">
-                            <div className="flex-1">
-                              <div className="flex justify-between text-xs mb-0.5"><span style={{ color: '#8892a4' }}>P</span><span style={{ color: '#2ea55e' }}>{study.prod_pct.toFixed(0)}%</span></div>
-                              <div className="h-1 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.08)' }}><div className="h-full rounded-full" style={{ width: `${study.prod_pct}%`, background: '#2ea55e' }} /></div>
-                            </div>
-                            <div className="flex-1">
-                              <div className="flex justify-between text-xs mb-0.5"><span style={{ color: '#8892a4' }}>Q</span><span style={{ color: '#3b82f6' }}>{study.qc_pct.toFixed(0)}%</span></div>
-                              <div className="h-1 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.08)' }}><div className="h-full rounded-full" style={{ width: `${study.qc_pct}%`, background: '#3b82f6' }} /></div>
-                            </div>
-                          </div>
-                          {study.failed_qc > 0 && <span className="text-xs flex-shrink-0 font-medium" title="QC Failures" style={{ color: '#ef4444' }}>{study.failed_qc}✗</span>}
-                          <span className="text-xs flex-shrink-0" style={{ color: '#8892a4' }}>{study.dbl ?? '—'}</span>
-                          <span className="text-xs flex-shrink-0" style={{ color: expandedStudy === study.study ? '#93c5fd' : '#8892a4' }}>
-                            {expandedStudy === study.study ? '▲ hide' : '▼ detail'}
-                          </span>
-                        </div>
-                        {expandedStudy === study.study && (
-                          <DrillDown study={study} onClose={() => setExpandedStudy(null)} effectiveTier={eTier} riskBump={bump} />
-                        )}
-                      </div>
-                    );
-                  })}
                 </div>
               );
             })}
