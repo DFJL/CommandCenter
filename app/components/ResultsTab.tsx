@@ -381,40 +381,78 @@ interface AllRecordsPanelProps {
 
 function AllRecordsPanel({ label, studies, filterStudy, granularMode, onClear, onGranularToggle }: AllRecordsPanelProps) {
   const [search, setSearch] = useState('');
+  const [colFilters, setColFilters] = useState({
+    client: '', portfolio: '', study: '', fpi: '', dbl: '',
+    deliverable: '', prodStatus: '', qcStatus: '',
+    delType: '', dataset: '',
+  });
+  const setCol = (key: keyof typeof colFilters, val: string) =>
+    setColFilters((prev) => ({ ...prev, [key]: val }));
+  const clearCols = () => setColFilters({ client: '', portfolio: '', study: '', fpi: '', dbl: '', deliverable: '', prodStatus: '', qcStatus: '', delType: '', dataset: '' });
+  const hasColFilters = Object.values(colFilters).some(Boolean);
 
   const sourceStudies = useMemo(
     () => (filterStudy ? studies.filter((s) => s.study === filterStudy) : studies),
     [studies, filterStudy]
   );
-
   const aggRows = useMemo(() => deriveDelRows(sourceStudies), [sourceStudies]);
-
   const granRows = useMemo((): GranularRow[] => {
     if (!granularMode || !filterStudy) return [];
     const sel = sourceStudies.find((s) => s.study === filterStudy);
     return sel ? generateGranularRows(sel) : [];
   }, [granularMode, filterStudy, sourceStudies]);
-
   const isGranular = !!granularMode && !!filterStudy;
 
+  // Dropdown option lists derived from current data
+  const uClients = useMemo(() => [...new Set(aggRows.map((r) => r.client))].sort(), [aggRows]);
+  const uPortfolios = useMemo(() => [...new Set(aggRows.map((r) => r.portfolio))].sort(), [aggRows]);
+  const uDeliverables = useMemo(() => [...new Set(aggRows.map((r) => r.deliverable))].sort(), [aggRows]);
+  const uAggProd = useMemo(() => [...new Set(aggRows.map((r) => r.prodStatus))], [aggRows]);
+  const uAggQc = useMemo(() => [...new Set(aggRows.map((r) => r.qcStatus))], [aggRows]);
+  const uDelTypes = useMemo(() => [...new Set(granRows.map((r) => r.deliverableType))].sort(), [granRows]);
+  const uGranProd = useMemo(() => [...new Set(granRows.map((r) => r.prodStatus))], [granRows]);
+  const uGranQc = useMemo(() => [...new Set(granRows.map((r) => r.qcStatus))], [granRows]);
+
   const filteredAgg = useMemo(() => {
-    if (!search.trim()) return aggRows;
-    const q = search.toLowerCase();
-    return aggRows.filter((r) =>
-      r.study.toLowerCase().includes(q) || r.client.toLowerCase().includes(q) ||
-      r.deliverable.toLowerCase().includes(q) || r.prodStatus.toLowerCase().includes(q) || r.qcStatus.toLowerCase().includes(q)
-    );
-  }, [aggRows, search]);
+    let rows = aggRows;
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      rows = rows.filter((r) =>
+        r.study.toLowerCase().includes(q) || r.client.toLowerCase().includes(q) ||
+        r.deliverable.toLowerCase().includes(q) || r.prodStatus.toLowerCase().includes(q) || r.qcStatus.toLowerCase().includes(q)
+      );
+    }
+    if (colFilters.client) rows = rows.filter((r) => r.client === colFilters.client);
+    if (colFilters.portfolio) rows = rows.filter((r) => r.portfolio === colFilters.portfolio);
+    if (colFilters.study) rows = rows.filter((r) => r.study.toLowerCase().includes(colFilters.study.toLowerCase()));
+    if (colFilters.fpi) rows = rows.filter((r) => r.fpi?.includes(colFilters.fpi) ?? false);
+    if (colFilters.dbl) rows = rows.filter((r) => r.dbl?.includes(colFilters.dbl) ?? false);
+    if (colFilters.deliverable) rows = rows.filter((r) => r.deliverable === colFilters.deliverable);
+    if (colFilters.prodStatus) rows = rows.filter((r) => r.prodStatus === colFilters.prodStatus);
+    if (colFilters.qcStatus) rows = rows.filter((r) => r.qcStatus === colFilters.qcStatus);
+    return rows;
+  }, [aggRows, search, colFilters]);
 
   const filteredGran = useMemo(() => {
-    if (!search.trim()) return granRows;
-    const q = search.toLowerCase();
-    return granRows.filter((r) =>
-      r.study.toLowerCase().includes(q) || r.client.toLowerCase().includes(q) ||
-      r.deliverableType.toLowerCase().includes(q) || r.dataset.toLowerCase().includes(q) ||
-      r.prodStatus.toLowerCase().includes(q) || r.qcStatus.toLowerCase().includes(q)
-    );
-  }, [granRows, search]);
+    let rows = granRows;
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      rows = rows.filter((r) =>
+        r.study.toLowerCase().includes(q) || r.client.toLowerCase().includes(q) ||
+        r.deliverableType.toLowerCase().includes(q) || r.dataset.toLowerCase().includes(q) ||
+        r.prodStatus.toLowerCase().includes(q) || r.qcStatus.toLowerCase().includes(q)
+      );
+    }
+    if (colFilters.client) rows = rows.filter((r) => r.client === colFilters.client);
+    if (colFilters.study) rows = rows.filter((r) => r.study.toLowerCase().includes(colFilters.study.toLowerCase()));
+    if (colFilters.fpi) rows = rows.filter((r) => r.fpi?.includes(colFilters.fpi) ?? false);
+    if (colFilters.dbl) rows = rows.filter((r) => r.dbl?.includes(colFilters.dbl) ?? false);
+    if (colFilters.delType) rows = rows.filter((r) => r.deliverableType === colFilters.delType);
+    if (colFilters.dataset) rows = rows.filter((r) => r.dataset.toLowerCase().includes(colFilters.dataset.toLowerCase()));
+    if (colFilters.prodStatus) rows = rows.filter((r) => r.prodStatus === colFilters.prodStatus);
+    if (colFilters.qcStatus) rows = rows.filter((r) => r.qcStatus === colFilters.qcStatus);
+    return rows;
+  }, [granRows, search, colFilters]);
 
   const totalRows = isGranular ? filteredGran.length : filteredAgg.length;
   const failRows = isGranular ? filteredGran.filter((r) => r.qcStatus === 'Failed QC').length : filteredAgg.filter((r) => r.qcStatus === 'Failed QC').length;
@@ -422,6 +460,7 @@ function AllRecordsPanel({ label, studies, filterStudy, granularMode, onClear, o
   const completedRows = isGranular ? filteredGran.filter((r) => r.prodStatus === 'Ready for QC').length : filteredAgg.filter((r) => r.prodStatus === 'Completed').length;
 
   const colStyle = { color: '#8892a4', fontSize: 10, fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.05em' };
+  const fi = { background: '#0d1117', color: '#e8eaf0', border: '1px solid rgba(255,255,255,0.08)', fontSize: 10, borderRadius: 3, width: '100%', padding: '2px 4px' } as const;
 
   return (
     <div className="rounded-lg mt-4" style={{ background: '#161b24', border: '1px solid rgba(255,255,255,0.07)' }}>
@@ -429,7 +468,7 @@ function AllRecordsPanel({ label, studies, filterStudy, granularMode, onClear, o
         <div className="flex items-center gap-4">
           <div>
             <p className="text-sm font-bold text-white">
-              All Records{label !== 'All Records' ? ` — ${label}` : ''}
+              Deliverable Tracker{label !== 'All Records' ? ` — ${label}` : ''}
             </p>
           </div>
           <div className="flex items-center gap-4">
@@ -447,20 +486,34 @@ function AllRecordsPanel({ label, studies, filterStudy, granularMode, onClear, o
             </div>
           )}
           <input type="text" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search records…" className="text-xs rounded px-3 py-1.5 border outline-none w-44" style={{ background: '#1c2230', color: '#e8eaf0', borderColor: 'rgba(255,255,255,0.1)' }} />
+          {hasColFilters && (
+            <button onClick={clearCols} className="text-xs px-2.5 py-1 rounded font-medium" style={{ background: 'rgba(239,68,68,0.12)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.25)' }}>↺ Clear col filters</button>
+          )}
           {onClear && (
-            <button onClick={onClear} className="text-xs px-3 py-1.5 rounded font-medium text-white/70 hover:text-white" style={{ background: 'rgba(255,255,255,0.15)' }}>✕ Clear filter</button>
+            <button onClick={onClear} className="text-xs px-3 py-1.5 rounded font-medium text-white/70 hover:text-white" style={{ background: 'rgba(255,255,255,0.15)' }}>✕ Clear study</button>
           )}
         </div>
       </div>
 
       <div style={{ maxHeight: '380px', overflowY: 'auto', overflowX: 'auto' }}>
         {isGranular ? (
-          <table className="w-full text-xs" style={{ minWidth: 800 }}>
+          <table className="w-full text-xs" style={{ minWidth: 800, borderCollapse: 'collapse' }}>
             <thead style={{ position: 'sticky', top: 0, background: '#1c2230', zIndex: 1 }}>
               <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
                 {['Client', 'Portfolio', 'Study', 'FPI', 'DBL', 'Del. Type', 'Dataset', 'Prod Status', 'QC Status'].map((h) => (
                   <th key={h} className="text-left px-3 py-2 whitespace-nowrap" style={colStyle}>{h}</th>
                 ))}
+              </tr>
+              <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', background: '#161b24' }}>
+                <th className="px-2 py-1"><select value={colFilters.client} onChange={(e) => setCol('client', e.target.value)} style={fi}><option value="">All</option>{uClients.map((c) => <option key={c} value={c}>{c}</option>)}</select></th>
+                <th className="px-2 py-1"><span style={{ color: '#444', fontSize: 9 }}>—</span></th>
+                <th className="px-2 py-1"><input value={colFilters.study} onChange={(e) => setCol('study', e.target.value)} placeholder="filter…" style={fi} /></th>
+                <th className="px-2 py-1"><input value={colFilters.fpi} onChange={(e) => setCol('fpi', e.target.value)} placeholder="yyyy-mm" style={fi} /></th>
+                <th className="px-2 py-1"><input value={colFilters.dbl} onChange={(e) => setCol('dbl', e.target.value)} placeholder="yyyy-mm" style={fi} /></th>
+                <th className="px-2 py-1"><select value={colFilters.delType} onChange={(e) => setCol('delType', e.target.value)} style={fi}><option value="">All</option>{uDelTypes.map((d) => <option key={d} value={d}>{d}</option>)}</select></th>
+                <th className="px-2 py-1"><input value={colFilters.dataset} onChange={(e) => setCol('dataset', e.target.value)} placeholder="filter…" style={fi} /></th>
+                <th className="px-2 py-1"><select value={colFilters.prodStatus} onChange={(e) => setCol('prodStatus', e.target.value)} style={fi}><option value="">All</option>{uGranProd.map((s) => <option key={s} value={s}>{s}</option>)}</select></th>
+                <th className="px-2 py-1"><select value={colFilters.qcStatus} onChange={(e) => setCol('qcStatus', e.target.value)} style={fi}><option value="">All</option>{uGranQc.map((s) => <option key={s} value={s}>{s}</option>)}</select></th>
               </tr>
             </thead>
             <tbody>
@@ -482,12 +535,24 @@ function AllRecordsPanel({ label, studies, filterStudy, granularMode, onClear, o
             </tbody>
           </table>
         ) : (
-          <table className="w-full text-xs" style={{ minWidth: 900 }}>
+          <table className="w-full text-xs" style={{ minWidth: 900, borderCollapse: 'collapse' }}>
             <thead style={{ position: 'sticky', top: 0, background: '#1c2230', zIndex: 1 }}>
               <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
                 {['Client', 'Portfolio', 'Study', 'FPI', 'DBL', 'Deliverable', 'Total', 'Prod Done', 'Prod %', 'Prod Status', 'QC Passed', 'QC Failed', 'QC %', 'QC Status'].map((h) => (
                   <th key={h} className="text-left px-3 py-2 whitespace-nowrap" style={colStyle}>{h}</th>
                 ))}
+              </tr>
+              <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', background: '#161b24' }}>
+                <th className="px-2 py-1"><select value={colFilters.client} onChange={(e) => setCol('client', e.target.value)} style={fi}><option value="">All</option>{uClients.map((c) => <option key={c} value={c}>{c}</option>)}</select></th>
+                <th className="px-2 py-1"><select value={colFilters.portfolio} onChange={(e) => setCol('portfolio', e.target.value)} style={fi}><option value="">All</option>{uPortfolios.map((p) => <option key={p} value={p}>{p}</option>)}</select></th>
+                <th className="px-2 py-1"><input value={colFilters.study} onChange={(e) => setCol('study', e.target.value)} placeholder="filter…" style={fi} /></th>
+                <th className="px-2 py-1"><input value={colFilters.fpi} onChange={(e) => setCol('fpi', e.target.value)} placeholder="yyyy-mm" style={fi} /></th>
+                <th className="px-2 py-1"><input value={colFilters.dbl} onChange={(e) => setCol('dbl', e.target.value)} placeholder="yyyy-mm" style={fi} /></th>
+                <th className="px-2 py-1"><select value={colFilters.deliverable} onChange={(e) => setCol('deliverable', e.target.value)} style={fi}><option value="">All</option>{uDeliverables.map((d) => <option key={d} value={d}>{d}</option>)}</select></th>
+                <th /><th /><th />
+                <th className="px-2 py-1"><select value={colFilters.prodStatus} onChange={(e) => setCol('prodStatus', e.target.value)} style={fi}><option value="">All</option>{uAggProd.map((s) => <option key={s} value={s}>{s}</option>)}</select></th>
+                <th /><th /><th />
+                <th className="px-2 py-1"><select value={colFilters.qcStatus} onChange={(e) => setCol('qcStatus', e.target.value)} style={fi}><option value="">All</option>{uAggQc.map((s) => <option key={s} value={s}>{s}</option>)}</select></th>
               </tr>
             </thead>
             <tbody>
@@ -551,6 +616,7 @@ export default function ResultsTab({ studies, savedUpdates = [] }: { studies: St
   const [selectedStudy, setSelectedStudy] = useState<string | null>(null);
   const [granularMode, setGranularMode] = useState(false);
   const [fsoFspFilter, setFsoFspFilter] = useState<'All' | 'FSO' | 'FSP'>('All');
+  const [riskFilter, setRiskFilter] = useState<string>('All');
   const [downloadToast, setDownloadToast] = useState(false);
 
   const clients = useMemo(
@@ -587,8 +653,11 @@ export default function ResultsTab({ studies, savedUpdates = [] }: { studies: St
     if (clientTableFilter !== 'All') {
       filtered = filtered.filter((s) => s.client === clientTableFilter);
     }
+    if (riskFilter !== 'All') {
+      filtered = filtered.filter((s) => effectiveTier(s, savedUpdates) === riskFilter);
+    }
     return filtered;
-  }, [nlqFiltered, tableSearch, clientTableFilter]);
+  }, [nlqFiltered, tableSearch, clientTableFilter, riskFilter, savedUpdates]);
 
   const groupedByClient = useMemo(() => {
     const groups: Record<string, Study[]> = {};
@@ -617,19 +686,22 @@ export default function ResultsTab({ studies, savedUpdates = [] }: { studies: St
   const avgProd = sidebarFiltered.length > 0 ? sidebarFiltered.reduce((a, s) => a + s.prod_pct, 0) / sidebarFiltered.length : 0;
   const avgQc = sidebarFiltered.length > 0 ? sidebarFiltered.reduce((a, s) => a + s.qc_pct, 0) / sidebarFiltered.length : 0;
 
-  // Trend data that updates with filter
+  // Chart uses fully-filtered set so it responds to NLQ, risk, client, search, FSO/FSP
+  const chartAvgProd = tableFiltered.length > 0 ? tableFiltered.reduce((a, s) => a + s.prod_pct, 0) / tableFiltered.length : 0;
+  const chartAvgQc = tableFiltered.length > 0 ? tableFiltered.reduce((a, s) => a + s.qc_pct, 0) / tableFiltered.length : 0;
+
   const trendData = useMemo(() => {
     const baseProd = BASE_TREND_DATA[BASE_TREND_DATA.length - 1].prod_pct;
     const baseQc = BASE_TREND_DATA[BASE_TREND_DATA.length - 1].qc_pct;
-    if (baseProd === 0 || baseQc === 0 || sidebarFiltered.length === 0) return BASE_TREND_DATA;
-    const prodScale = avgProd / baseProd;
-    const qcScale = avgQc / baseQc;
+    if (baseProd === 0 || baseQc === 0 || tableFiltered.length === 0) return BASE_TREND_DATA;
+    const prodScale = chartAvgProd / baseProd;
+    const qcScale = chartAvgQc / baseQc;
     return BASE_TREND_DATA.map((d, i) =>
       i === BASE_TREND_DATA.length - 1
-        ? { ...d, prod_pct: +avgProd.toFixed(1), qc_pct: +avgQc.toFixed(1) }
+        ? { ...d, prod_pct: +chartAvgProd.toFixed(1), qc_pct: +chartAvgQc.toFixed(1) }
         : { ...d, prod_pct: +(d.prod_pct * prodScale).toFixed(1), qc_pct: +(d.qc_pct * qcScale).toFixed(1) }
     );
-  }, [avgProd, avgQc, sidebarFiltered.length]);
+  }, [chartAvgProd, chartAvgQc, tableFiltered.length]);
 
   const trendDeltaProd = +(trendData[trendData.length - 1].prod_pct - trendData[trendData.length - 2].prod_pct).toFixed(1);
   const trendDeltaQc = +(trendData[trendData.length - 1].qc_pct - trendData[trendData.length - 2].qc_pct).toFixed(1);
@@ -639,6 +711,7 @@ export default function ResultsTab({ studies, savedUpdates = [] }: { studies: St
     setSelectedStudy(null);
     setGranularMode(false);
     setFsoFspFilter('All');
+    setRiskFilter('All');
     setNlqActive(false);
     setNlqQuery('');
     setClientTableFilter('All');
@@ -748,7 +821,7 @@ export default function ResultsTab({ studies, savedUpdates = [] }: { studies: St
         {/* NLQ Chat */}
         <div className="rounded-lg" style={{ background: '#161b24', border: '1px solid rgba(255,255,255,0.07)' }}>
           <div className="px-4 pt-3 pb-2 flex items-center justify-between">
-            <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: '#8892a4' }}>Portfolio Query</p>
+            <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: '#8892a4' }}>AI Query</p>
             {chatHistory.length > 0 && <button onClick={clearNlq} className="text-xs px-2 py-0.5 rounded" style={{ color: '#8892a4', background: 'rgba(255,255,255,0.05)' }}>Clear chat</button>}
           </div>
           {chatHistory.length > 0 && (
@@ -824,8 +897,10 @@ export default function ResultsTab({ studies, savedUpdates = [] }: { studies: St
         <div className="rounded-lg p-4" style={{ background: '#161b24', border: '1px solid rgba(255,255,255,0.07)' }}>
           <div className="flex items-center justify-between mb-3">
             <p className="text-sm font-semibold" style={{ color: '#e8eaf0' }}>
-              Completion Over Time
-              {(fsoFspFilter !== 'All' || nlqActive) && <span className="ml-2 text-xs font-normal" style={{ color: '#3b82f6' }}>· filtered</span>}
+              Delivery Trend
+              {(fsoFspFilter !== 'All' || nlqActive || riskFilter !== 'All' || !!tableSearch || clientTableFilter !== 'All') && (
+                <span className="ml-2 text-xs font-normal" style={{ color: '#3b82f6' }}>· filtered</span>
+              )}
             </p>
             <span className="text-xs" style={{ color: '#8892a4' }}>{SNAPSHOT_DATES.length} Snapshot dates ▼</span>
           </div>
@@ -847,7 +922,7 @@ export default function ResultsTab({ studies, savedUpdates = [] }: { studies: St
           {/* Toolbar */}
           <div className="flex items-center justify-between px-4 py-3 flex-wrap gap-2" style={{ borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
             <p className="text-sm font-semibold" style={{ color: '#e8eaf0' }}>
-              Portfolio Overview
+              Delivery Portfolio
               <span className="ml-2 text-xs font-normal" style={{ color: '#8892a4' }}>({tableFiltered.length} studies · {groupedByClient.length} clients)</span>
             </p>
             <div className="flex items-center gap-2 flex-wrap">
@@ -868,6 +943,17 @@ export default function ResultsTab({ studies, savedUpdates = [] }: { studies: St
               {(['All', 'FSO', 'FSP'] as const).map((f) => (
                 <button key={f} onClick={() => setFsoFspFilter(f)} className="text-xs px-2.5 py-1 rounded font-medium" style={{ background: fsoFspFilter === f ? '#3b82f6' : 'rgba(255,255,255,0.05)', color: fsoFspFilter === f ? '#fff' : '#8892a4' }}>{f}</button>
               ))}
+              <div style={{ borderLeft: '1px solid rgba(255,255,255,0.1)', height: 16 }} />
+              <span className="text-xs" style={{ color: '#8892a4' }}>Risk:</span>
+              {(['All', 'Critical', 'High', 'Elevated', 'Moderate', 'Low'] as const).map((r) => {
+                const riskColor: Record<string, string> = { All: '#8892a4', Critical: '#ef4444', High: '#f97316', Elevated: '#f59e0b', Moderate: '#eab308', Low: '#22c55e' };
+                const active = riskFilter === r;
+                return (
+                  <button key={r} onClick={() => setRiskFilter(r)} className="text-xs px-2 py-1 rounded font-medium" style={{ background: active ? `${riskColor[r]}22` : 'rgba(255,255,255,0.05)', color: active ? riskColor[r] : '#8892a4', border: active ? `1px solid ${riskColor[r]}55` : '1px solid transparent' }}>
+                    {r === 'All' ? 'All' : `${RISK_EMOJI[r]} ${r}`}
+                  </button>
+                );
+              })}
               <div style={{ borderLeft: '1px solid rgba(255,255,255,0.1)', height: 16 }} />
               <button onClick={handleReset} className="text-xs px-2.5 py-1 rounded font-medium" style={{ background: 'rgba(239,68,68,0.1)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.2)' }}>↺ Reset</button>
             </div>
