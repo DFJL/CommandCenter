@@ -36,20 +36,18 @@ export type P21Finding = {
   avg_resolution_hrs: string;
 };
 
+export type MilestoneEntry = {
+  id: string;
+  type: string;
+  planned: string;
+  actual: string;
+};
+
 export type StudyUpdate = {
   id: string;
   study: string;
   savedAt: string;
-  milestones: {
-    sap_planned: string;
-    sap_actual: string;
-    prog_planned: string;
-    prog_actual: string;
-    tfl_planned: string;
-    tfl_actual: string;
-    dbl_planned: string;
-    dbl_actual: string;
-  };
+  milestones: MilestoneEntry[];
   deliverables: {
     sdtm: string;
     adam: string;

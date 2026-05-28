@@ -1,22 +1,30 @@
 'use client';
 
 import { useState } from 'react';
-import type { Study, StudyUpdate } from '../types';
+import type { Study, StudyUpdate, MilestoneEntry } from '../types';
 
-const DELIVERABLE_OPTIONS = [
-  'Not Started',
-  'In Progress',
-  'Ready for QC',
-  'Passed QC',
-  'Delivered',
+const MILESTONE_TYPES = [
+  'First Patient In (FPI)',
+  'Last Patient Out (LPO)',
+  'Database Lock (DBL)',
+  'SAP Finalization',
+  'Programming Start',
+  'TFL Delivery',
+  'Interim Analysis',
+  'DMC Meeting',
+  'Protocol Amendment',
+  'SDTM Delivery',
+  'ADaM Delivery',
+  'CSR Submission',
+  'Add next major deliverable',
+  'Other',
 ];
 
+const DELIVERABLE_OPTIONS = ['Not Started', 'In Progress', 'Ready for QC', 'Passed QC', 'Delivered'];
 const ISSUE_CATEGORIES = ['Technical', 'Process', 'Client', 'Resource', 'Other'];
 const ISSUE_SEVERITIES = ['Low', 'Medium', 'High'];
 
-type Milestones = StudyUpdate['milestones'];
 type Deliverables = StudyUpdate['deliverables'];
-
 
 interface StudyUpdatesTabProps {
   studies: Study[];
@@ -24,34 +32,21 @@ interface StudyUpdatesTabProps {
   savedUpdates: StudyUpdate[];
 }
 
-export default function StudyUpdatesTab({
-  studies,
-  onSave,
-  savedUpdates,
-}: StudyUpdatesTabProps) {
+let milestoneCounter = 0;
+function newMilestone(): MilestoneEntry {
+  return { id: `ms-${++milestoneCounter}`, type: MILESTONE_TYPES[0], planned: '', actual: '' };
+}
+
+export default function StudyUpdatesTab({ studies, onSave, savedUpdates }: StudyUpdatesTabProps) {
   const [selectedStudy, setSelectedStudy] = useState('');
-  const [milestones, setMilestones] = useState<Milestones>({
-    sap_planned: '',
-    sap_actual: '',
-    prog_planned: '',
-    prog_actual: '',
-    tfl_planned: '',
-    tfl_actual: '',
-    dbl_planned: '',
-    dbl_actual: '',
-  });
+  const [milestones, setMilestones] = useState<MilestoneEntry[]>([newMilestone()]);
   const [deliverables, setDeliverables] = useState<Deliverables>({
     sdtm: 'Not Started',
     adam: 'Not Started',
     tfls: 'Not Started',
     define: 'Not Started',
   });
-  const [issue, setIssue] = useState({
-    date: '',
-    category: 'Technical',
-    severity: 'Low',
-    description: '',
-  });
+  const [issue, setIssue] = useState({ date: '', category: 'Technical', severity: 'Low', description: '' });
   const [comments, setComments] = useState('');
   const [toast, setToast] = useState<string | null>(null);
 
@@ -60,17 +55,25 @@ export default function StudyUpdatesTab({
     setTimeout(() => setToast(null), 3000);
   };
 
+  const addMilestone = () => setMilestones((prev) => [...prev, newMilestone()]);
+
+  const removeMilestone = (id: string) =>
+    setMilestones((prev) => (prev.length > 1 ? prev.filter((m) => m.id !== id) : prev));
+
+  const updateMilestone = (id: string, field: keyof MilestoneEntry, value: string) =>
+    setMilestones((prev) => prev.map((m) => (m.id === id ? { ...m, [field]: value } : m)));
+
+  const isLateMilestone = (m: MilestoneEntry) =>
+    m.planned && m.actual && m.actual > m.planned;
+
   const handleSave = () => {
     if (!selectedStudy) {
       showToast('Please select a study first.');
       return;
     }
-
-    const tflLate =
-      milestones.tfl_actual &&
-      milestones.tfl_planned &&
-      milestones.tfl_actual > milestones.tfl_planned;
-
+    const tflLate = milestones.some(
+      (m) => m.type === 'TFL Delivery' && isLateMilestone(m)
+    );
     const update: StudyUpdate = {
       id: `upd-${Date.now()}`,
       study: selectedStudy,
@@ -81,52 +84,26 @@ export default function StudyUpdatesTab({
       comments,
       riskBump: tflLate ? 0.15 : 0,
     };
-
     onSave(update);
     showToast(`Update saved for ${selectedStudy}${tflLate ? ' · Risk bumped +0.15 (TFL late)' : ''}`);
-
-    // Reset form
     setSelectedStudy('');
-    setMilestones({
-      sap_planned: '',
-      sap_actual: '',
-      prog_planned: '',
-      prog_actual: '',
-      tfl_planned: '',
-      tfl_actual: '',
-      dbl_planned: '',
-      dbl_actual: '',
-    });
+    setMilestones([newMilestone()]);
     setDeliverables({ sdtm: 'Not Started', adam: 'Not Started', tfls: 'Not Started', define: 'Not Started' });
     setIssue({ date: '', category: 'Technical', severity: 'Low', description: '' });
     setComments('');
   };
 
-  const inputClass =
-    'w-full text-sm rounded px-3 py-1.5 border outline-none focus:ring-1';
-  const inputStyle = {
-    background: '#0d1117',
-    color: '#e8eaf0',
-    borderColor: 'rgba(255,255,255,0.1)',
-  };
-
+  const inputClass = 'w-full text-sm rounded px-3 py-1.5 border outline-none focus:ring-1';
+  const inputStyle = { background: '#0d1117', color: '#e8eaf0', borderColor: 'rgba(255,255,255,0.1)' };
   const labelClass = 'text-xs font-medium mb-1 block';
   const labelStyle = { color: '#8892a4' };
-
   const sectionCard = 'rounded-lg p-4 space-y-3';
-  const sectionCardStyle = {
-    background: '#161b24',
-    border: '1px solid rgba(255,255,255,0.07)',
-  };
+  const sectionCardStyle = { background: '#161b24', border: '1px solid rgba(255,255,255,0.07)' };
 
   return (
     <div className="p-5">
-      {/* Toast */}
       {toast && (
-        <div
-          className="fixed bottom-5 right-5 z-50 px-4 py-3 rounded-lg shadow-lg text-sm"
-          style={{ background: '#2ea55e', color: '#fff' }}
-        >
+        <div className="fixed bottom-5 right-5 z-50 px-4 py-3 rounded-lg shadow-lg text-sm" style={{ background: '#2ea55e', color: '#fff' }}>
           ✓ {toast}
         </div>
       )}
@@ -136,13 +113,9 @@ export default function StudyUpdatesTab({
         <div className="col-span-3 space-y-4">
           {/* Study selector */}
           <div className={sectionCard} style={sectionCardStyle}>
-            <p className="text-sm font-semibold" style={{ color: '#e8eaf0' }}>
-              Study Selection
-            </p>
+            <p className="text-sm font-semibold" style={{ color: '#e8eaf0' }}>Study Selection</p>
             <div>
-              <label className={labelClass} style={labelStyle}>
-                Select Study *
-              </label>
+              <label className={labelClass} style={labelStyle}>Select Study *</label>
               <select
                 value={selectedStudy}
                 onChange={(e) => setSelectedStudy(e.target.value)}
@@ -164,75 +137,91 @@ export default function StudyUpdatesTab({
 
           {/* Milestones */}
           <div className={sectionCard} style={sectionCardStyle}>
-            <p className="text-sm font-semibold mb-1" style={{ color: '#e8eaf0' }}>
-              Milestone Dates
-            </p>
-            {[
-              { key: 'sap', label: 'SAP Finalization', planned: 'sap_planned', actual: 'sap_actual' },
-              { key: 'prog', label: 'Programming Start', planned: 'prog_planned', actual: 'prog_actual' },
-              { key: 'tfl', label: 'TFL Delivery', planned: 'tfl_planned', actual: 'tfl_actual' },
-              { key: 'dbl', label: 'Database Lock', planned: 'dbl_planned', actual: 'dbl_actual' },
-            ].map((m) => (
-              <div key={m.key} className="grid grid-cols-3 gap-3 items-center">
-                <span className="text-xs font-medium" style={{ color: '#e8eaf0' }}>
-                  {m.label}
-                </span>
-                <div>
-                  <label className={labelClass} style={labelStyle}>Planned</label>
-                  <input
-                    type="date"
-                    value={milestones[m.planned as keyof Milestones]}
-                    onChange={(e) =>
-                      setMilestones((prev) => ({
-                        ...prev,
-                        [m.planned]: e.target.value,
-                      }))
-                    }
-                    className={inputClass}
-                    style={inputStyle}
-                  />
-                </div>
-                <div>
-                  <label className={labelClass} style={labelStyle}>Actual</label>
-                  <input
-                    type="date"
-                    value={milestones[m.actual as keyof Milestones]}
-                    onChange={(e) =>
-                      setMilestones((prev) => ({
-                        ...prev,
-                        [m.actual]: e.target.value,
-                      }))
-                    }
-                    className={inputClass}
-                    style={{
-                      ...inputStyle,
-                      borderColor:
-                        m.key === 'tfl' &&
-                        milestones.tfl_actual &&
-                        milestones.tfl_planned &&
-                        milestones.tfl_actual > milestones.tfl_planned
-                          ? 'rgba(239,68,68,0.5)'
-                          : inputStyle.borderColor,
-                    }}
-                  />
-                  {m.key === 'tfl' &&
-                    milestones.tfl_actual &&
-                    milestones.tfl_planned &&
-                    milestones.tfl_actual > milestones.tfl_planned && (
-                      <p className="text-xs mt-0.5" style={{ color: '#ef4444' }}>
-                        Late — risk +0.15
-                      </p>
-                    )}
-                </div>
-              </div>
-            ))}
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-semibold" style={{ color: '#e8eaf0' }}>Milestone Dates</p>
+              <button
+                onClick={addMilestone}
+                className="text-xs px-3 py-1 rounded font-medium"
+                style={{ background: 'rgba(46,165,94,0.1)', color: '#2ea55e', border: '1px solid rgba(46,165,94,0.3)' }}
+              >
+                + Add Milestone
+              </button>
+            </div>
+
+            {/* Column headers */}
+            <div className="grid grid-cols-12 gap-2 text-xs pb-1" style={{ color: '#8892a4' }}>
+              <div className="col-span-5">Milestone Type</div>
+              <div className="col-span-3">Planned Date</div>
+              <div className="col-span-3">Actual Date</div>
+              <div className="col-span-1" />
+            </div>
+
+            <div className="space-y-2">
+              {milestones.map((m) => {
+                const late = isLateMilestone(m);
+                return (
+                  <div key={m.id} className="grid grid-cols-12 gap-2 items-start">
+                    {/* Type combo */}
+                    <div className="col-span-5">
+                      <select
+                        value={m.type}
+                        onChange={(e) => updateMilestone(m.id, 'type', e.target.value)}
+                        className="w-full text-xs rounded px-2 py-1.5 border outline-none"
+                        style={inputStyle}
+                      >
+                        {MILESTONE_TYPES.map((t) => (
+                          <option key={t} value={t}>{t}</option>
+                        ))}
+                      </select>
+                    </div>
+                    {/* Planned */}
+                    <div className="col-span-3">
+                      <input
+                        type="date"
+                        value={m.planned}
+                        onChange={(e) => updateMilestone(m.id, 'planned', e.target.value)}
+                        className="w-full text-xs rounded px-2 py-1.5 border outline-none"
+                        style={inputStyle}
+                      />
+                    </div>
+                    {/* Actual */}
+                    <div className="col-span-3">
+                      <input
+                        type="date"
+                        value={m.actual}
+                        onChange={(e) => updateMilestone(m.id, 'actual', e.target.value)}
+                        className="w-full text-xs rounded px-2 py-1.5 border outline-none"
+                        style={{
+                          ...inputStyle,
+                          borderColor: late ? 'rgba(239,68,68,0.5)' : inputStyle.borderColor,
+                        }}
+                      />
+                      {late && (
+                        <p className="text-xs mt-0.5" style={{ color: '#ef4444' }}>
+                          Late{m.type === 'TFL Delivery' ? ' · risk +0.15' : ''}
+                        </p>
+                      )}
+                    </div>
+                    {/* Remove */}
+                    <div className="col-span-1 flex items-center justify-center pt-1">
+                      <button
+                        onClick={() => removeMilestone(m.id)}
+                        className="text-xs rounded w-6 h-6 flex items-center justify-center"
+                        style={{ color: '#8892a4', background: 'rgba(255,255,255,0.05)' }}
+                        title="Remove milestone"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
 
           {/* Deliverable Status */}
           <div className={sectionCard} style={sectionCardStyle}>
-            <p className="text-sm font-semibold mb-1" style={{ color: '#e8eaf0' }}>
-              Deliverable Status
-            </p>
+            <p className="text-sm font-semibold mb-1" style={{ color: '#e8eaf0' }}>Deliverable Status</p>
             <div className="grid grid-cols-2 gap-3">
               {[
                 { key: 'sdtm', label: 'SDTM' },
@@ -241,17 +230,10 @@ export default function StudyUpdatesTab({
                 { key: 'define', label: 'Define.xml' },
               ].map((d) => (
                 <div key={d.key}>
-                  <label className={labelClass} style={labelStyle}>
-                    {d.label}
-                  </label>
+                  <label className={labelClass} style={labelStyle}>{d.label}</label>
                   <select
                     value={deliverables[d.key as keyof Deliverables]}
-                    onChange={(e) =>
-                      setDeliverables((prev) => ({
-                        ...prev,
-                        [d.key]: e.target.value,
-                      }))
-                    }
+                    onChange={(e) => setDeliverables((prev) => ({ ...prev, [d.key]: e.target.value }))}
                     className={inputClass}
                     style={{
                       ...inputStyle,
@@ -264,9 +246,7 @@ export default function StudyUpdatesTab({
                     }}
                   >
                     {DELIVERABLE_OPTIONS.map((opt) => (
-                      <option key={opt} value={opt}>
-                        {opt}
-                      </option>
+                      <option key={opt} value={opt}>{opt}</option>
                     ))}
                   </select>
                 </div>
@@ -276,9 +256,7 @@ export default function StudyUpdatesTab({
 
           {/* Issue Log */}
           <div className={sectionCard} style={sectionCardStyle}>
-            <p className="text-sm font-semibold mb-1" style={{ color: '#e8eaf0' }}>
-              Issue Log
-            </p>
+            <p className="text-sm font-semibold mb-1" style={{ color: '#e8eaf0' }}>Issue Log</p>
             <div className="grid grid-cols-3 gap-3">
               <div>
                 <label className={labelClass} style={labelStyle}>Date</label>
@@ -298,9 +276,7 @@ export default function StudyUpdatesTab({
                   className={inputClass}
                   style={inputStyle}
                 >
-                  {ISSUE_CATEGORIES.map((c) => (
-                    <option key={c} value={c}>{c}</option>
-                  ))}
+                  {ISSUE_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
                 </select>
               </div>
               <div>
@@ -311,9 +287,7 @@ export default function StudyUpdatesTab({
                   className={inputClass}
                   style={inputStyle}
                 >
-                  {ISSUE_SEVERITIES.map((s) => (
-                    <option key={s} value={s}>{s}</option>
-                  ))}
+                  {ISSUE_SEVERITIES.map((s) => <option key={s} value={s}>{s}</option>)}
                 </select>
               </div>
             </div>
@@ -332,9 +306,7 @@ export default function StudyUpdatesTab({
 
           {/* Comments */}
           <div className={sectionCard} style={sectionCardStyle}>
-            <p className="text-sm font-semibold mb-1" style={{ color: '#e8eaf0' }}>
-              Study Comments
-            </p>
+            <p className="text-sm font-semibold mb-1" style={{ color: '#e8eaf0' }}>Study Comments</p>
             <textarea
               value={comments}
               onChange={(e) => setComments(e.target.value)}
@@ -347,7 +319,7 @@ export default function StudyUpdatesTab({
 
           <button
             onClick={handleSave}
-            className="w-full py-3 rounded-lg font-semibold text-sm transition-opacity hover:opacity-90"
+            className="w-full py-3 rounded-lg font-semibold text-sm hover:opacity-90 transition-opacity"
             style={{ background: '#2ea55e', color: '#fff' }}
           >
             Save Update
@@ -356,10 +328,7 @@ export default function StudyUpdatesTab({
 
         {/* Saved Updates — 2 cols */}
         <div className="col-span-2">
-          <div
-            className="rounded-lg"
-            style={{ background: '#161b24', border: '1px solid rgba(255,255,255,0.07)' }}
-          >
+          <div className="rounded-lg" style={{ background: '#161b24', border: '1px solid rgba(255,255,255,0.07)' }}>
             <div className="p-4 border-b" style={{ borderColor: 'rgba(255,255,255,0.07)' }}>
               <p className="text-sm font-semibold" style={{ color: '#e8eaf0' }}>
                 Saved Updates ({savedUpdates.length})
@@ -374,12 +343,8 @@ export default function StudyUpdatesTab({
                 <table className="w-full text-sm">
                   <thead>
                     <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
-                      {['Study', 'Saved At', 'TFL Status', 'Risk Bump', 'Issue'].map((h) => (
-                        <th
-                          key={h}
-                          className="text-left px-3 py-2 text-xs font-medium uppercase tracking-wider"
-                          style={{ color: '#8892a4' }}
-                        >
+                      {['Study', 'Saved At', 'Milestones', 'Risk Bump', 'Issue'].map((h) => (
+                        <th key={h} className="text-left px-3 py-2 text-xs font-medium uppercase tracking-wider" style={{ color: '#8892a4' }}>
                           {h}
                         </th>
                       ))}
@@ -387,31 +352,13 @@ export default function StudyUpdatesTab({
                   </thead>
                   <tbody>
                     {savedUpdates.map((u) => (
-                      <tr
-                        key={u.id}
-                        style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}
-                        className="hover:bg-white/[0.02] transition-colors"
-                      >
-                        <td className="px-3 py-2 font-medium text-xs" style={{ color: '#e8eaf0' }}>
-                          {u.study}
-                        </td>
+                      <tr key={u.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }} className="hover:bg-white/[0.02] transition-colors">
+                        <td className="px-3 py-2 font-medium text-xs" style={{ color: '#e8eaf0' }}>{u.study}</td>
                         <td className="px-3 py-2 text-xs" style={{ color: '#8892a4' }}>
                           {new Date(u.savedAt).toLocaleDateString()}
                         </td>
-                        <td className="px-3 py-2 text-xs">
-                          <span
-                            className="px-1.5 py-0.5 rounded"
-                            style={{
-                              background:
-                                u.deliverables.tfls === 'Delivered'
-                                  ? 'rgba(34,197,94,0.1)'
-                                  : 'rgba(255,255,255,0.05)',
-                              color:
-                                u.deliverables.tfls === 'Delivered' ? '#22c55e' : '#8892a4',
-                            }}
-                          >
-                            {u.deliverables.tfls}
-                          </span>
+                        <td className="px-3 py-2 text-xs" style={{ color: '#8892a4' }}>
+                          {Array.isArray(u.milestones) ? u.milestones.length : 'legacy'}
                         </td>
                         <td className="px-3 py-2 text-xs">
                           {u.riskBump > 0 ? (

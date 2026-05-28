@@ -37,16 +37,30 @@ const RISK_ORDER: Record<string, number> = {
   Low: 4,
 };
 
-const TREND_DATA = [
-  { date: 'Dec 25', prod_pct: 61.2, qc_pct: 54.7 },
-  { date: 'Jan 26', prod_pct: 64.8, qc_pct: 58.3 },
-  { date: 'Feb 26', prod_pct: 68.1, qc_pct: 62.0 },
-  { date: 'Mar 26', prod_pct: 70.9, qc_pct: 65.1 },
-  { date: 'Apr 26', prod_pct: 73.2, qc_pct: 67.8 },
-  { date: 'May 26', prod_pct: 75.4, qc_pct: 70.2 },
-  { date: 'Jun 26', prod_pct: 77.1, qc_pct: 72.4 },
-  { date: 'Today', prod_pct: 78.6, qc_pct: 73.9 },
+const SNAPSHOT_DATES = [
+  'Today (28/05/2026)',
+  'Apr 2026',
+  'Mar 2026',
+  'Feb 2026',
+  'Jan 2026',
+  'Dec 2025',
+  'Nov 2025',
+  'Oct 2025',
 ];
+
+const TREND_DATA = [
+  { date: 'Oct 25', prod_pct: 58.2, qc_pct: 52.1 },
+  { date: 'Nov 25', prod_pct: 61.8, qc_pct: 55.7 },
+  { date: 'Dec 25', prod_pct: 64.3, qc_pct: 58.4 },
+  { date: 'Jan 26', prod_pct: 67.1, qc_pct: 61.2 },
+  { date: 'Feb 26', prod_pct: 69.8, qc_pct: 63.7 },
+  { date: 'Mar 26', prod_pct: 71.4, qc_pct: 65.9 },
+  { date: 'Apr 26', prod_pct: 73.2, qc_pct: 67.8 },
+  { date: 'Today', prod_pct: 75.4, qc_pct: 70.2 },
+];
+
+const TREND_DELTA_PROD = +(TREND_DATA[TREND_DATA.length - 1].prod_pct - TREND_DATA[TREND_DATA.length - 2].prod_pct).toFixed(1);
+const TREND_DELTA_QC = +(TREND_DATA[TREND_DATA.length - 1].qc_pct - TREND_DATA[TREND_DATA.length - 2].qc_pct).toFixed(1);
 
 function filterByNlq(query: string, studies: Study[]): Study[] {
   const q = query.toLowerCase();
@@ -65,27 +79,17 @@ function filterByNlq(query: string, studies: Study[]): Study[] {
     );
   if (/fsp/.test(q)) return studies.filter((s) => s.fso_fsp === 'FSP');
   if (/fso/.test(q)) return studies.filter((s) => s.fso_fsp === 'FSO');
-  const clients = [...new Set(studies.map((s) => s.client.toLowerCase()))];
-  const matchedClient = clients.find(
+  const clientNames = [...new Set(studies.map((s) => s.client.toLowerCase()))];
+  const matchedClient = clientNames.find(
     (c) => q.includes(c) || c.includes(q.split(' ')[0])
   );
   if (matchedClient)
     return studies.filter((s) => s.client.toLowerCase() === matchedClient);
-  const tas = [
-    'oncology',
-    'cardiovascular',
-    'respiratory',
-    'neurology',
-    'immunology',
-    'rare disease',
-    'hepatology',
-  ];
+  const tas = ['oncology', 'cardiovascular', 'respiratory', 'neurology', 'immunology', 'rare disease', 'hepatology'];
   const matchedTa = tas.find((ta) => q.includes(ta));
   if (matchedTa) return studies.filter((s) => s.ta.toLowerCase() === matchedTa);
   return studies;
 }
-
-type SortKey = 'risk' | 'prod_pct' | 'qc_pct';
 
 interface DrillDownProps {
   study: Study;
@@ -94,17 +98,12 @@ interface DrillDownProps {
 
 function DrillDown({ study, onClose }: DrillDownProps) {
   const prodQcGap = study.prod_pct - study.qc_pct;
-  const topFactors = [...study.risk_factors]
-    .sort((a, b) => b.value - a.value)
-    .slice(0, 3);
+  const topFactors = [...study.risk_factors].sort((a, b) => b.value - a.value).slice(0, 3);
 
   return (
     <div
-      className="rounded-lg p-5 mt-1 mb-2 relative"
-      style={{
-        background: '#1c2230',
-        border: '1px solid rgba(255,255,255,0.1)',
-      }}
+      className="rounded-lg p-5 my-1 relative"
+      style={{ background: '#1c2230', border: '1px solid rgba(255,255,255,0.1)' }}
     >
       <button
         onClick={onClose}
@@ -114,149 +113,83 @@ function DrillDown({ study, onClose }: DrillDownProps) {
         ✕ Close
       </button>
       <h3 className="text-sm font-semibold mb-4" style={{ color: '#e8eaf0' }}>
-        {study.study} — Drill Down
+        {study.study} — Detail View
       </h3>
       <div className="grid grid-cols-3 gap-4">
-        {/* Completion */}
         <div>
-          <p className="text-xs font-medium mb-3" style={{ color: '#8892a4' }}>
-            COMPLETION
-          </p>
+          <p className="text-xs font-medium mb-3 uppercase tracking-wider" style={{ color: '#8892a4' }}>COMPLETION</p>
           <div className="space-y-3">
-            <div>
-              <div className="flex justify-between text-xs mb-1" style={{ color: '#8892a4' }}>
-                <span>Production</span>
-                <span style={{ color: '#2ea55e' }}>{study.prod_pct.toFixed(1)}%</span>
+            {[
+              { label: 'Production', value: study.prod_pct, color: '#2ea55e' },
+              { label: 'QC', value: study.qc_pct, color: '#3b82f6' },
+              { label: 'Overall', value: (study.prod_pct + study.qc_pct) / 2, color: undefined },
+            ].map((m) => (
+              <div key={m.label}>
+                <div className="flex justify-between text-xs mb-1" style={{ color: '#8892a4' }}>
+                  <span>{m.label}</span>
+                  <span style={{ color: m.color ?? '#e8eaf0' }}>{m.value.toFixed(1)}%</span>
+                </div>
+                <div className="h-2 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.08)' }}>
+                  <div
+                    className="h-full rounded-full"
+                    style={{
+                      width: `${Math.min(m.value, 100)}%`,
+                      background: m.color ?? 'linear-gradient(90deg, #2ea55e, #3b82f6)',
+                    }}
+                  />
+                </div>
               </div>
-              <div className="h-2 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.08)' }}>
-                <div
-                  className="h-full rounded-full"
-                  style={{ width: `${study.prod_pct}%`, background: '#2ea55e' }}
-                />
-              </div>
-            </div>
-            <div>
-              <div className="flex justify-between text-xs mb-1" style={{ color: '#8892a4' }}>
-                <span>QC</span>
-                <span style={{ color: '#3b82f6' }}>{study.qc_pct.toFixed(1)}%</span>
-              </div>
-              <div className="h-2 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.08)' }}>
-                <div
-                  className="h-full rounded-full"
-                  style={{ width: `${study.qc_pct}%`, background: '#3b82f6' }}
-                />
-              </div>
-            </div>
-            <div>
-              <div className="flex justify-between text-xs mb-1" style={{ color: '#8892a4' }}>
-                <span>Overall Progress</span>
-                <span style={{ color: '#e8eaf0' }}>
-                  {((study.prod_pct + study.qc_pct) / 2).toFixed(1)}%
-                </span>
-              </div>
-              <div className="h-2 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.08)' }}>
-                <div
-                  className="h-full rounded-full"
-                  style={{
-                    width: `${(study.prod_pct + study.qc_pct) / 2}%`,
-                    background: 'linear-gradient(90deg, #2ea55e, #3b82f6)',
-                  }}
-                />
-              </div>
-            </div>
+            ))}
           </div>
         </div>
-
-        {/* Key Metrics */}
         <div>
-          <p className="text-xs font-medium mb-3" style={{ color: '#8892a4' }}>
-            KEY METRICS
-          </p>
+          <p className="text-xs font-medium mb-3 uppercase tracking-wider" style={{ color: '#8892a4' }}>KEY METRICS</p>
           <div className="space-y-2">
             {[
               { label: 'Prod–QC Gap', value: `${prodQcGap.toFixed(1)}pp` },
               { label: 'Sig. Delays', value: study.sig_delays },
               { label: 'Failed QC', value: study.failed_qc },
-              {
-                label: 'Weeks to DBL',
-                value:
-                  study.weeks_to_dbl !== null ? study.weeks_to_dbl.toFixed(1) : 'N/A',
-              },
+              { label: 'Weeks to DBL', value: study.weeks_to_dbl !== null ? study.weeks_to_dbl.toFixed(1) : 'N/A' },
               { label: 'Deliverables', value: study.total_del },
+              { label: 'Portfolio', value: study.portfolio.replace(' Portfolio', '') },
             ].map((m) => (
-              <div
-                key={m.label}
-                className="flex justify-between items-center py-1 border-b"
-                style={{ borderColor: 'rgba(255,255,255,0.06)' }}
-              >
-                <span className="text-xs" style={{ color: '#8892a4' }}>
-                  {m.label}
-                </span>
-                <span className="text-xs font-medium" style={{ color: '#e8eaf0' }}>
-                  {m.value}
-                </span>
+              <div key={m.label} className="flex justify-between items-center py-1 border-b" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
+                <span className="text-xs" style={{ color: '#8892a4' }}>{m.label}</span>
+                <span className="text-xs font-medium" style={{ color: '#e8eaf0' }}>{m.value}</span>
               </div>
             ))}
           </div>
         </div>
-
-        {/* AI Risk Model */}
-        <div
-          className="rounded-lg p-3"
-          style={{ background: 'rgba(59,130,246,0.06)', border: '1px solid rgba(59,130,246,0.2)' }}
-        >
-          <p className="text-xs font-medium mb-3" style={{ color: '#3b82f6' }}>
-            AI RISK MODEL
-          </p>
+        <div className="rounded-lg p-3" style={{ background: 'rgba(59,130,246,0.06)', border: '1px solid rgba(59,130,246,0.2)' }}>
+          <p className="text-xs font-medium mb-3 uppercase tracking-wider" style={{ color: '#3b82f6' }}>AI RISK MODEL</p>
           <div className="space-y-2 mb-3">
             <div className="flex justify-between text-xs">
               <span style={{ color: '#8892a4' }}>AI Risk Score</span>
-              <span style={{ color: '#3b82f6' }}>
-                {(study.ai_risk_score * 100).toFixed(0)}%
-              </span>
+              <span style={{ color: '#3b82f6' }}>{(study.ai_risk_score * 100).toFixed(0)}%</span>
             </div>
             <div className="h-2 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.08)' }}>
-              <div
-                className="h-full rounded-full"
-                style={{ width: `${study.ai_risk_score * 100}%`, background: '#3b82f6' }}
-              />
+              <div className="h-full rounded-full" style={{ width: `${study.ai_risk_score * 100}%`, background: '#3b82f6' }} />
             </div>
             <div className="flex justify-between text-xs">
-              <span style={{ color: '#8892a4' }}>Rule-Based Score</span>
-              <span style={{ color: '#e8eaf0' }}>
-                {(study.risk_score * 100).toFixed(0)}%
-              </span>
+              <span style={{ color: '#8892a4' }}>Rule-Based</span>
+              <span style={{ color: '#e8eaf0' }}>{(study.risk_score * 100).toFixed(0)}%</span>
             </div>
           </div>
-          <p className="text-xs mb-2" style={{ color: '#8892a4' }}>
-            Top Risk Factors
-          </p>
+          <p className="text-xs mb-2" style={{ color: '#8892a4' }}>Top Risk Factors</p>
           <div className="space-y-2">
             {topFactors.length === 0 ? (
-              <p className="text-xs" style={{ color: '#8892a4' }}>
-                No significant factors
-              </p>
-            ) : (
-              topFactors.map((f) => (
-                <div key={f.label}>
-                  <div className="flex justify-between text-xs mb-1">
-                    <span style={{ color: '#8892a4' }}>{f.label}</span>
-                    <span style={{ color: '#3b82f6' }}>
-                      {(f.value * 100).toFixed(0)}%
-                    </span>
-                  </div>
-                  <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.08)' }}>
-                    <div
-                      className="h-full rounded-full"
-                      style={{
-                        width: `${Math.min(f.value * 100, 100)}%`,
-                        background: '#3b82f6',
-                      }}
-                    />
-                  </div>
+              <p className="text-xs" style={{ color: '#8892a4' }}>No significant factors</p>
+            ) : topFactors.map((f) => (
+              <div key={f.label}>
+                <div className="flex justify-between text-xs mb-1">
+                  <span style={{ color: '#8892a4' }}>{f.label}</span>
+                  <span style={{ color: '#3b82f6' }}>{(f.value * 100).toFixed(0)}%</span>
                 </div>
-              ))
-            )}
+                <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.08)' }}>
+                  <div className="h-full rounded-full" style={{ width: `${Math.min(f.value * 100, 100)}%`, background: '#3b82f6' }} />
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       </div>
@@ -265,42 +198,55 @@ function DrillDown({ study, onClose }: DrillDownProps) {
 }
 
 export default function ResultsTab({ studies }: { studies: Study[] }) {
-  const [businessLine, setBusinessLine] = useState<'All' | 'FSO' | 'FSP'>('All');
-  const [clientFilter, setClientFilter] = useState('All');
+  // SCOPE state
+  const [allStudies, setAllStudies] = useState(true);
+  const [allClients, setAllClients] = useState(true);
+  const [allPortfolios, setAllPortfolios] = useState(true);
+  const [clientScopeFilter, setClientScopeFilter] = useState('All');
+  const [portfolioFilter, setPortfolioFilter] = useState('All');
+  // TIME state
+  const [snapshotDate, setSnapshotDate] = useState(SNAPSHOT_DATES[0]);
   const [onlyStarted, setOnlyStarted] = useState(false);
+  // NLQ state
   const [nlqInput, setNlqInput] = useState('');
   const [nlqResponse, setNlqResponse] = useState('');
   const [nlqLoading, setNlqLoading] = useState(false);
   const [nlqActive, setNlqActive] = useState(false);
   const [nlqQuery, setNlqQuery] = useState('');
+  // Table state
   const [tableSearch, setTableSearch] = useState('');
-  const [sortKey, setSortKey] = useState<SortKey>('risk');
-  const [sortAsc, setSortAsc] = useState(true);
-  const [page, setPage] = useState(1);
+  const [clientTableFilter, setClientTableFilter] = useState('All');
+  const [sortMode, setSortMode] = useState<'severity' | 'score'>('severity');
+  const [expandedClients, setExpandedClients] = useState<Set<string>>(new Set());
   const [expandedStudy, setExpandedStudy] = useState<string | null>(null);
+  // Download toast
+  const [downloadToast, setDownloadToast] = useState(false);
 
   const clients = useMemo(
     () => ['All', ...Array.from(new Set(studies.map((s) => s.client))).sort()],
     [studies]
   );
 
-  // Base filters (sidebar)
+  const portfolios = useMemo(
+    () => Array.from(new Set(studies.map((s) => s.portfolio))).sort(),
+    [studies]
+  );
+
   const sidebarFiltered = useMemo(() => {
     return studies.filter((s) => {
-      if (businessLine !== 'All' && s.fso_fsp !== businessLine) return false;
-      if (clientFilter !== 'All' && s.client !== clientFilter) return false;
+      if (!allStudies && s.prod_pct === 0) return false;
       if (onlyStarted && s.prod_pct === 0) return false;
+      if (!allClients && clientScopeFilter !== 'All' && s.client !== clientScopeFilter) return false;
+      if (!allPortfolios && portfolioFilter !== 'All' && s.portfolio !== portfolioFilter) return false;
       return true;
     });
-  }, [studies, businessLine, clientFilter, onlyStarted]);
+  }, [studies, allStudies, allClients, clientScopeFilter, allPortfolios, portfolioFilter, onlyStarted]);
 
-  // NLQ filter
   const nlqFiltered = useMemo(() => {
     if (!nlqActive || !nlqQuery) return sidebarFiltered;
     return filterByNlq(nlqQuery, sidebarFiltered);
   }, [sidebarFiltered, nlqActive, nlqQuery]);
 
-  // Table search + sort
   const tableFiltered = useMemo(() => {
     let filtered = nlqFiltered;
     if (tableSearch) {
@@ -309,23 +255,31 @@ export default function ResultsTab({ studies }: { studies: Study[] }) {
         (s) => s.study.toLowerCase().includes(q) || s.client.toLowerCase().includes(q)
       );
     }
-    const sorted = [...filtered].sort((a, b) => {
-      if (sortKey === 'risk') {
-        const diff = RISK_ORDER[a.risk_tier] - RISK_ORDER[b.risk_tier];
-        return sortAsc ? diff : -diff;
-      }
-      if (sortKey === 'prod_pct') return sortAsc ? a.prod_pct - b.prod_pct : b.prod_pct - a.prod_pct;
-      if (sortKey === 'qc_pct') return sortAsc ? a.qc_pct - b.qc_pct : b.qc_pct - a.qc_pct;
-      return 0;
+    if (clientTableFilter !== 'All') {
+      filtered = filtered.filter((s) => s.client === clientTableFilter);
+    }
+    return filtered;
+  }, [nlqFiltered, tableSearch, clientTableFilter]);
+
+  const groupedByClient = useMemo(() => {
+    const groups: Record<string, Study[]> = {};
+    tableFiltered.forEach((s) => {
+      if (!groups[s.client]) groups[s.client] = [];
+      groups[s.client].push(s);
     });
-    return sorted;
-  }, [nlqFiltered, tableSearch, sortKey, sortAsc]);
+    return Object.entries(groups)
+      .map(([client, clientStudies]) => {
+        const sorted = [...clientStudies].sort((a, b) =>
+          sortMode === 'severity'
+            ? RISK_ORDER[a.risk_tier] - RISK_ORDER[b.risk_tier]
+            : b.ai_risk_score - a.ai_risk_score
+        );
+        const worstRiskOrder = Math.min(...clientStudies.map((s) => RISK_ORDER[s.risk_tier]));
+        return { client, studies: sorted, worstRiskOrder };
+      })
+      .sort((a, b) => a.worstRiskOrder - b.worstRiskOrder);
+  }, [tableFiltered, sortMode]);
 
-  const pageSize = 15;
-  const totalPages = Math.max(1, Math.ceil(tableFiltered.length / pageSize));
-  const paginated = tableFiltered.slice((page - 1) * pageSize, page * pageSize);
-
-  // KPIs from sidebar-filtered (not nlq-filtered)
   const delayed = sidebarFiltered.filter((s) => s.delayed).length;
   const atRisk = sidebarFiltered.filter((s) => s.at_risk).length;
   const avgProd =
@@ -337,10 +291,13 @@ export default function ResultsTab({ studies }: { studies: Study[] }) {
       ? sidebarFiltered.reduce((a, s) => a + s.qc_pct, 0) / sidebarFiltered.length
       : 0;
 
-  const handleSort = (key: SortKey) => {
-    if (sortKey === key) setSortAsc(!sortAsc);
-    else { setSortKey(key); setSortAsc(true); }
-    setPage(1);
+  const toggleClient = (client: string) => {
+    setExpandedClients((prev) => {
+      const next = new Set(prev);
+      if (next.has(client)) next.delete(client);
+      else next.add(client);
+      return next;
+    });
   };
 
   const handleNlq = async (q?: string) => {
@@ -349,7 +306,6 @@ export default function ResultsTab({ studies }: { studies: Study[] }) {
     setNlqLoading(true);
     setNlqActive(true);
     setNlqQuery(query);
-    setPage(1);
     try {
       const context = `Total studies: ${studies.length}, Delayed: ${delayed}, At-risk: ${atRisk}, Avg prod: ${avgProd.toFixed(1)}%, Avg QC: ${avgQc.toFixed(1)}%`;
       const res = await fetch('/api/nlq', {
@@ -371,7 +327,11 @@ export default function ResultsTab({ studies }: { studies: Study[] }) {
     setNlqQuery('');
     setNlqResponse('');
     setNlqInput('');
-    setPage(1);
+  };
+
+  const handleDownload = () => {
+    setDownloadToast(true);
+    setTimeout(() => setDownloadToast(false), 2500);
   };
 
   const QUICK_CHIPS = [
@@ -383,74 +343,122 @@ export default function ResultsTab({ studies }: { studies: Study[] }) {
 
   return (
     <div className="flex" style={{ minHeight: 'calc(100vh - 112px)' }}>
+      {/* Download toast */}
+      {downloadToast && (
+        <div className="fixed bottom-5 right-5 z-50 px-4 py-3 rounded-lg shadow-lg text-sm" style={{ background: '#2ea55e', color: '#fff' }}>
+          ↓ Report download coming soon
+        </div>
+      )}
+
       {/* Sidebar */}
       <aside
-        className="w-56 flex-shrink-0 p-4 border-r flex flex-col gap-5"
+        className="w-56 flex-shrink-0 p-4 border-r flex flex-col gap-4"
         style={{ background: '#1c2230', borderColor: 'rgba(255,255,255,0.07)' }}
       >
-        {/* Business Line */}
+        {/* SCOPE */}
         <div>
-          <p className="text-xs font-semibold mb-2 uppercase tracking-wider" style={{ color: '#8892a4' }}>
-            Business Line
-          </p>
-          <div className="flex flex-col gap-1.5">
-            {(['All', 'FSO', 'FSP'] as const).map((bl) => (
-              <label key={bl} className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="radio"
-                  name="bl"
-                  checked={businessLine === bl}
-                  onChange={() => { setBusinessLine(bl); setPage(1); }}
-                  className="accent-green-500"
-                />
-                <span className="text-sm" style={{ color: businessLine === bl ? '#2ea55e' : '#e8eaf0' }}>
-                  {bl}
-                </span>
-              </label>
-            ))}
+          <p className="text-xs font-bold mb-3 uppercase tracking-widest" style={{ color: '#2ea55e' }}>SCOPE</p>
+          <div className="flex flex-col gap-2">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={allStudies}
+                onChange={(e) => setAllStudies(e.target.checked)}
+                className="accent-green-500"
+              />
+              <span className="text-sm" style={{ color: '#e8eaf0' }}>All studies</span>
+            </label>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={allClients}
+                onChange={(e) => {
+                  setAllClients(e.target.checked);
+                  if (e.target.checked) setClientScopeFilter('All');
+                }}
+                className="accent-green-500"
+              />
+              <span className="text-sm" style={{ color: '#e8eaf0' }}>All clients</span>
+            </label>
+            {!allClients && (
+              <select
+                value={clientScopeFilter}
+                onChange={(e) => setClientScopeFilter(e.target.value)}
+                className="w-full text-xs rounded px-2 py-1.5 border ml-4"
+                style={{ background: '#0d1117', color: '#e8eaf0', borderColor: 'rgba(255,255,255,0.1)' }}
+              >
+                {clients.map((c) => <option key={c} value={c}>{c}</option>)}
+              </select>
+            )}
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={allPortfolios}
+                onChange={(e) => {
+                  setAllPortfolios(e.target.checked);
+                  if (e.target.checked) setPortfolioFilter('All');
+                }}
+                className="accent-green-500"
+              />
+              <span className="text-sm" style={{ color: '#e8eaf0' }}>All portfolios</span>
+            </label>
+            {!allPortfolios && (
+              <div className="flex flex-col gap-1.5 ml-4 mt-1">
+                {portfolios.map((p) => (
+                  <label key={p} className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="portfolio"
+                      checked={portfolioFilter === p}
+                      onChange={() => setPortfolioFilter(p)}
+                      className="accent-green-500"
+                    />
+                    <span className="text-xs" style={{ color: portfolioFilter === p ? '#2ea55e' : '#e8eaf0' }}>
+                      {p.replace(' Portfolio', '')}
+                    </span>
+                  </label>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 
-        {/* Client Filter */}
-        <div>
-          <p className="text-xs font-semibold mb-2 uppercase tracking-wider" style={{ color: '#8892a4' }}>
-            Client
-          </p>
-          <select
-            value={clientFilter}
-            onChange={(e) => { setClientFilter(e.target.value); setPage(1); }}
-            className="w-full text-sm rounded px-2 py-1.5 border"
-            style={{
-              background: '#0d1117',
-              color: '#e8eaf0',
-              borderColor: 'rgba(255,255,255,0.1)',
-            }}
-          >
-            {clients.map((c) => (
-              <option key={c} value={c}>{c}</option>
-            ))}
-          </select>
-        </div>
+        <div style={{ borderTop: '1px solid rgba(255,255,255,0.07)' }} />
 
-        {/* Only started */}
+        {/* TIME */}
         <div>
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={onlyStarted}
-              onChange={(e) => { setOnlyStarted(e.target.checked); setPage(1); }}
-              className="accent-green-500"
-            />
-            <span className="text-sm" style={{ color: '#e8eaf0' }}>Only started studies</span>
-          </label>
-          <p className="text-xs mt-1" style={{ color: '#8892a4' }}>
-            Hide 0% production
-          </p>
+          <p className="text-xs font-bold mb-3 uppercase tracking-widest" style={{ color: '#2ea55e' }}>TIME</p>
+          <div className="flex flex-col gap-2">
+            <select
+              value={snapshotDate}
+              onChange={(e) => setSnapshotDate(e.target.value)}
+              className="w-full text-xs rounded px-2 py-1.5 border"
+              style={{ background: '#0d1117', color: '#e8eaf0', borderColor: 'rgba(255,255,255,0.1)' }}
+            >
+              {SNAPSHOT_DATES.map((d) => <option key={d} value={d}>{d}</option>)}
+            </select>
+            <label className="flex items-center gap-2 cursor-pointer mt-1">
+              <input
+                type="checkbox"
+                checked={onlyStarted}
+                onChange={(e) => setOnlyStarted(e.target.checked)}
+                className="accent-green-500"
+              />
+              <span className="text-xs" style={{ color: '#e8eaf0' }}>Only started studies</span>
+            </label>
+            <button
+              onClick={handleDownload}
+              className="w-full text-xs py-2 rounded mt-2 transition-opacity hover:opacity-80"
+              style={{ background: 'rgba(46,165,94,0.1)', color: '#2ea55e', border: '1px solid rgba(46,165,94,0.3)' }}
+            >
+              ↓ Download Report
+            </button>
+          </div>
         </div>
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 p-5 space-y-5 min-w-0">
+      <main className="flex-1 p-5 space-y-4 min-w-0">
         {/* NLQ Card */}
         <div
           className="rounded-lg p-4"
@@ -467,16 +475,12 @@ export default function ResultsTab({ studies }: { studies: Study[] }) {
               onKeyDown={(e) => e.key === 'Enter' && handleNlq()}
               placeholder="Ask about your portfolio…"
               className="flex-1 text-sm rounded px-3 py-2 border outline-none"
-              style={{
-                background: '#1c2230',
-                color: '#e8eaf0',
-                borderColor: 'rgba(255,255,255,0.1)',
-              }}
+              style={{ background: '#1c2230', color: '#e8eaf0', borderColor: 'rgba(255,255,255,0.1)' }}
             />
             <button
               onClick={() => handleNlq()}
               disabled={nlqLoading}
-              className="px-4 py-2 rounded text-sm font-medium transition-opacity"
+              className="px-4 py-2 rounded text-sm font-medium"
               style={{ background: '#2ea55e', color: '#fff', opacity: nlqLoading ? 0.6 : 1 }}
             >
               {nlqLoading ? '…' : 'Ask'}
@@ -491,36 +495,26 @@ export default function ResultsTab({ studies }: { studies: Study[] }) {
               </button>
             )}
           </div>
-          <div className="flex flex-wrap gap-2 mb-3">
+          <div className="flex flex-wrap gap-2 mb-2">
             {QUICK_CHIPS.map((chip) => (
               <button
                 key={chip}
                 onClick={() => { setNlqInput(chip); handleNlq(chip); }}
-                className="text-xs px-3 py-1 rounded-full border transition-colors"
-                style={{
-                  borderColor: 'rgba(46,165,94,0.4)',
-                  color: '#2ea55e',
-                  background: 'rgba(46,165,94,0.08)',
-                }}
+                className="text-xs px-3 py-1 rounded-full border"
+                style={{ borderColor: 'rgba(46,165,94,0.4)', color: '#2ea55e', background: 'rgba(46,165,94,0.08)' }}
               >
                 {chip}
               </button>
             ))}
           </div>
           {nlqLoading && (
-            <div className="flex items-center gap-2">
-              <div
-                className="w-4 h-4 border-2 border-t-transparent rounded-full animate-spin"
-                style={{ borderColor: '#3b82f6', borderTopColor: 'transparent' }}
-              />
+            <div className="flex items-center gap-2 mt-2">
+              <div className="w-4 h-4 border-2 border-t-transparent rounded-full animate-spin" style={{ borderColor: '#3b82f6', borderTopColor: 'transparent' }} />
               <span className="text-xs" style={{ color: '#8892a4' }}>Analyzing…</span>
             </div>
           )}
           {nlqResponse && !nlqLoading && (
-            <div
-              className="rounded px-3 py-2 text-sm"
-              style={{ background: 'rgba(59,130,246,0.08)', color: '#93c5fd', border: '1px solid rgba(59,130,246,0.2)' }}
-            >
+            <div className="rounded px-3 py-2 text-sm mt-2" style={{ background: 'rgba(59,130,246,0.08)', color: '#93c5fd', border: '1px solid rgba(59,130,246,0.2)' }}>
               {nlqResponse}
               {nlqActive && (
                 <span className="ml-2 text-xs" style={{ color: '#8892a4' }}>
@@ -533,301 +527,243 @@ export default function ResultsTab({ studies }: { studies: Study[] }) {
 
         {/* KPI Row */}
         <div className="grid grid-cols-5 gap-3">
-          {[
-            { label: 'Total Studies', value: sidebarFiltered.length, color: '#e8eaf0' },
-            { label: 'Delayed', value: delayed, color: '#dc2626' },
-            { label: 'At-Risk', value: atRisk, color: '#f97316' },
-            { label: 'Avg Prod %', value: `${avgProd.toFixed(1)}%`, color: '#2ea55e' },
-            { label: 'Avg QC %', value: `${avgQc.toFixed(1)}%`, color: '#3b82f6' },
-          ].map((kpi) => (
-            <div
-              key={kpi.label}
-              className="rounded-lg p-4 text-center"
-              style={{ background: '#161b24', border: '1px solid rgba(255,255,255,0.07)' }}
-            >
-              <div className="text-2xl font-bold" style={{ color: kpi.color }}>
-                {kpi.value}
-              </div>
-              <div className="text-xs mt-1" style={{ color: '#8892a4' }}>
-                {kpi.label}
-              </div>
+          {/* Total Studies */}
+          <div className="rounded-lg p-4 text-center" style={{ background: '#161b24', border: '1px solid rgba(255,255,255,0.07)' }}>
+            <div className="text-2xl font-bold" style={{ color: '#e8eaf0' }}>{sidebarFiltered.length}</div>
+            <div className="text-xs mt-1" style={{ color: '#8892a4' }}>Total Studies</div>
+          </div>
+          {/* Delayed */}
+          <div className="rounded-lg p-4 text-center" style={{ background: '#161b24', border: '1px solid rgba(255,255,255,0.07)' }}>
+            <div className="text-2xl font-bold" style={{ color: '#dc2626' }}>{delayed}</div>
+            <div className="text-xs mt-1" style={{ color: '#8892a4' }}>Delayed</div>
+          </div>
+          {/* At-Risk */}
+          <div className="rounded-lg p-4 text-center" style={{ background: '#161b24', border: '1px solid rgba(255,255,255,0.07)' }}>
+            <div className="text-2xl font-bold" style={{ color: '#f97316' }}>{atRisk}</div>
+            <div className="text-xs mt-1" style={{ color: '#8892a4' }}>At-Risk</div>
+          </div>
+          {/* Production Done */}
+          <div className="rounded-lg px-4 pt-3 pb-2" style={{ background: '#161b24', border: '1px solid rgba(255,255,255,0.07)' }}>
+            <div className="flex items-end justify-between mb-1">
+              <div className="text-2xl font-bold" style={{ color: '#2ea55e' }}>{avgProd.toFixed(1)}%</div>
+              <span className="text-xs mb-1" style={{ color: TREND_DELTA_PROD >= 0 ? '#22c55e' : '#ef4444' }}>
+                {TREND_DELTA_PROD >= 0 ? '↑' : '↓'} {Math.abs(TREND_DELTA_PROD)}% vs prev
+              </span>
             </div>
-          ))}
+            <div className="h-1.5 rounded-full overflow-hidden mb-1.5" style={{ background: 'rgba(255,255,255,0.08)' }}>
+              <div className="h-full rounded-full" style={{ width: `${Math.min(avgProd, 100)}%`, background: '#2ea55e' }} />
+            </div>
+            <div className="text-xs" style={{ color: '#8892a4' }}>Production Done</div>
+          </div>
+          {/* QC Done */}
+          <div className="rounded-lg px-4 pt-3 pb-2" style={{ background: '#161b24', border: '1px solid rgba(255,255,255,0.07)' }}>
+            <div className="flex items-end justify-between mb-1">
+              <div className="text-2xl font-bold" style={{ color: '#3b82f6' }}>{avgQc.toFixed(1)}%</div>
+              <span className="text-xs mb-1" style={{ color: TREND_DELTA_QC >= 0 ? '#22c55e' : '#ef4444' }}>
+                {TREND_DELTA_QC >= 0 ? '↑' : '↓'} {Math.abs(TREND_DELTA_QC)}% vs prev
+              </span>
+            </div>
+            <div className="h-1.5 rounded-full overflow-hidden mb-1.5" style={{ background: 'rgba(255,255,255,0.08)' }}>
+              <div className="h-full rounded-full" style={{ width: `${Math.min(avgQc, 100)}%`, background: '#3b82f6' }} />
+            </div>
+            <div className="text-xs" style={{ color: '#8892a4' }}>QC Done</div>
+          </div>
         </div>
 
         {/* Completion Over Time */}
-        <div
-          className="rounded-lg p-4"
-          style={{ background: '#161b24', border: '1px solid rgba(255,255,255,0.07)' }}
-        >
-          <p className="text-sm font-semibold mb-4" style={{ color: '#e8eaf0' }}>
-            Completion Over Time
-          </p>
-          <ResponsiveContainer width="100%" height={220}>
+        <div className="rounded-lg p-4" style={{ background: '#161b24', border: '1px solid rgba(255,255,255,0.07)' }}>
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-sm font-semibold" style={{ color: '#e8eaf0' }}>Completion Over Time</p>
+            <div className="flex items-center gap-1.5 text-xs" style={{ color: '#8892a4' }}>
+              <span>{SNAPSHOT_DATES.length} Snapshot dates</span>
+              <span style={{ color: '#2ea55e' }}>▼</span>
+            </div>
+          </div>
+          <ResponsiveContainer width="100%" height={200}>
             <LineChart data={TREND_DATA} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
-              <XAxis
-                dataKey="date"
-                tick={{ fill: '#8892a4', fontSize: 11 }}
-                axisLine={{ stroke: 'rgba(255,255,255,0.1)' }}
-                tickLine={false}
-              />
-              <YAxis
-                domain={[50, 85]}
-                tick={{ fill: '#8892a4', fontSize: 11 }}
-                axisLine={{ stroke: 'rgba(255,255,255,0.1)' }}
-                tickLine={false}
-                tickFormatter={(v) => `${v}%`}
-              />
+              <XAxis dataKey="date" tick={{ fill: '#8892a4', fontSize: 11 }} axisLine={{ stroke: 'rgba(255,255,255,0.1)' }} tickLine={false} />
+              <YAxis domain={[50, 80]} tick={{ fill: '#8892a4', fontSize: 11 }} axisLine={{ stroke: 'rgba(255,255,255,0.1)' }} tickLine={false} tickFormatter={(v) => `${v}%`} />
               <Tooltip
                 contentStyle={{ background: '#1c2230', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 6 }}
                 labelStyle={{ color: '#e8eaf0', marginBottom: 4 }}
                 itemStyle={{ color: '#8892a4' }}
                 formatter={(value) => [`${value}%`]}
               />
-              <Legend
-                wrapperStyle={{ color: '#8892a4', fontSize: 12, paddingTop: 8 }}
-              />
-              <Line
-                type="monotone"
-                dataKey="prod_pct"
-                name="Production"
-                stroke="#2ea55e"
-                strokeWidth={2}
-                dot={{ fill: '#2ea55e', r: 3 }}
-                activeDot={{ r: 5 }}
-              />
-              <Line
-                type="monotone"
-                dataKey="qc_pct"
-                name="QC"
-                stroke="#3b82f6"
-                strokeWidth={2}
-                dot={{ fill: '#3b82f6', r: 3 }}
-                activeDot={{ r: 5 }}
-              />
+              <Legend wrapperStyle={{ color: '#8892a4', fontSize: 12, paddingTop: 8 }} />
+              <Line type="monotone" dataKey="prod_pct" name="Production" stroke="#2ea55e" strokeWidth={2} dot={{ fill: '#2ea55e', r: 3 }} activeDot={{ r: 5 }} />
+              <Line type="monotone" dataKey="qc_pct" name="QC" stroke="#3b82f6" strokeWidth={2} dot={{ fill: '#3b82f6', r: 3 }} activeDot={{ r: 5 }} />
             </LineChart>
           </ResponsiveContainer>
         </div>
 
-        {/* Study Table */}
-        <div
-          className="rounded-lg"
-          style={{ background: '#161b24', border: '1px solid rgba(255,255,255,0.07)' }}
-        >
-          <div className="flex items-center justify-between p-4 pb-3">
+        {/* Completion % by Study */}
+        <div className="rounded-lg" style={{ background: '#161b24', border: '1px solid rgba(255,255,255,0.07)' }}>
+          {/* Table header */}
+          <div className="flex items-center justify-between p-4 pb-2">
             <p className="text-sm font-semibold" style={{ color: '#e8eaf0' }}>
-              Studies ({tableFiltered.length})
+              Completion % by Study
+              <span className="ml-2 text-xs font-normal" style={{ color: '#8892a4' }}>({tableFiltered.length} studies)</span>
             </p>
-            <input
-              type="text"
-              value={tableSearch}
-              onChange={(e) => { setTableSearch(e.target.value); setPage(1); }}
-              placeholder="Search study or client…"
-              className="text-sm rounded px-3 py-1.5 border outline-none w-52"
-              style={{
-                background: '#1c2230',
-                color: '#e8eaf0',
-                borderColor: 'rgba(255,255,255,0.1)',
-              }}
-            />
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
-                  {[
-                    { key: 'risk' as SortKey, label: 'Risk' },
-                    { key: null, label: 'Study' },
-                    { key: null, label: 'Client' },
-                    { key: null, label: 'TA' },
-                    { key: null, label: 'Type' },
-                    { key: 'prod_pct' as SortKey, label: 'Prod %' },
-                    { key: 'qc_pct' as SortKey, label: 'QC %' },
-                    { key: null, label: 'DBL' },
-                    { key: null, label: 'Wks' },
-                  ].map((col) => (
-                    <th
-                      key={col.label}
-                      className="text-left px-4 py-2 text-xs font-medium uppercase tracking-wider"
-                      style={{ color: '#8892a4', cursor: col.key ? 'pointer' : 'default' }}
-                      onClick={() => col.key && handleSort(col.key)}
-                    >
-                      {col.label}
-                      {col.key && sortKey === col.key && (
-                        <span className="ml-1">{sortAsc ? '↑' : '↓'}</span>
-                      )}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {paginated.map((study) => (
-                  <>
-                    <tr
-                      key={study.study}
-                      onClick={() =>
-                        setExpandedStudy(
-                          expandedStudy === study.study ? null : study.study
-                        )
-                      }
-                      className="cursor-pointer transition-colors"
-                      style={{
-                        borderBottom: '1px solid rgba(255,255,255,0.05)',
-                        background:
-                          expandedStudy === study.study
-                            ? 'rgba(46,165,94,0.06)'
-                            : 'transparent',
-                      }}
-                      onMouseEnter={(e) => {
-                        if (expandedStudy !== study.study)
-                          (e.currentTarget as HTMLTableRowElement).style.background =
-                            'rgba(255,255,255,0.03)';
-                      }}
-                      onMouseLeave={(e) => {
-                        if (expandedStudy !== study.study)
-                          (e.currentTarget as HTMLTableRowElement).style.background =
-                            'transparent';
-                      }}
-                    >
-                      <td className="px-4 py-2">
-                        <span
-                          className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium ${RISK_STYLES[study.risk_tier]}`}
-                        >
-                          <span>{RISK_EMOJI[study.risk_tier]}</span>
-                          {study.risk_tier}
-                        </span>
-                      </td>
-                      <td className="px-4 py-2 font-medium" style={{ color: '#e8eaf0' }}>
-                        {study.study}
-                      </td>
-                      <td className="px-4 py-2 text-xs" style={{ color: '#8892a4' }}>
-                        {study.client}
-                      </td>
-                      <td className="px-4 py-2 text-xs" style={{ color: '#8892a4' }}>
-                        {study.ta}
-                      </td>
-                      <td className="px-4 py-2">
-                        <span
-                          className="text-xs px-1.5 py-0.5 rounded"
-                          style={{
-                            background:
-                              study.fso_fsp === 'FSO'
-                                ? 'rgba(46,165,94,0.1)'
-                                : 'rgba(59,130,246,0.1)',
-                            color: study.fso_fsp === 'FSO' ? '#2ea55e' : '#3b82f6',
-                          }}
-                        >
-                          {study.fso_fsp}
-                        </span>
-                      </td>
-                      <td className="px-4 py-2">
-                        <span
-                          style={{
-                            color:
-                              study.prod_pct >= 80
-                                ? '#22c55e'
-                                : study.prod_pct >= 60
-                                ? '#eab308'
-                                : '#ef4444',
-                          }}
-                        >
-                          {study.prod_pct.toFixed(1)}%
-                        </span>
-                      </td>
-                      <td className="px-4 py-2">
-                        <span
-                          style={{
-                            color:
-                              study.qc_pct >= 80
-                                ? '#22c55e'
-                                : study.qc_pct >= 60
-                                ? '#eab308'
-                                : '#ef4444',
-                          }}
-                        >
-                          {study.qc_pct.toFixed(1)}%
-                        </span>
-                      </td>
-                      <td className="px-4 py-2 text-xs" style={{ color: '#8892a4' }}>
-                        {study.dbl ?? '—'}
-                      </td>
-                      <td className="px-4 py-2 text-xs" style={{ color: '#8892a4' }}>
-                        {study.weeks_to_dbl !== null ? study.weeks_to_dbl.toFixed(1) : '—'}
-                      </td>
-                    </tr>
-                    {expandedStudy === study.study && (
-                      <tr key={`${study.study}-drill`}>
-                        <td colSpan={9} className="px-4">
-                          <DrillDown
-                            study={study}
-                            onClose={() => setExpandedStudy(null)}
-                          />
-                        </td>
-                      </tr>
-                    )}
-                  </>
-                ))}
-                {paginated.length === 0 && (
-                  <tr>
-                    <td
-                      colSpan={9}
-                      className="px-4 py-8 text-center text-sm"
-                      style={{ color: '#8892a4' }}
-                    >
-                      No studies match the current filters.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                value={tableSearch}
+                onChange={(e) => setTableSearch(e.target.value)}
+                placeholder="Search study or client…"
+                className="text-sm rounded px-3 py-1.5 border outline-none w-44"
+                style={{ background: '#1c2230', color: '#e8eaf0', borderColor: 'rgba(255,255,255,0.1)' }}
+              />
+              <select
+                value={clientTableFilter}
+                onChange={(e) => setClientTableFilter(e.target.value)}
+                className="text-xs rounded px-2 py-1.5 border"
+                style={{ background: '#1c2230', color: '#e8eaf0', borderColor: 'rgba(255,255,255,0.1)' }}
+              >
+                <option value="All">Filter by Client</option>
+                {clients.slice(1).map((c) => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
           </div>
 
-          {/* Pagination */}
-          {totalPages > 1 && (
-            <div
-              className="flex items-center justify-between px-4 py-3 border-t"
-              style={{ borderColor: 'rgba(255,255,255,0.07)' }}
-            >
-              <span className="text-xs" style={{ color: '#8892a4' }}>
-                Page {page} of {totalPages} · {tableFiltered.length} studies
-              </span>
-              <div className="flex gap-1">
-                <button
-                  onClick={() => setPage(Math.max(1, page - 1))}
-                  disabled={page === 1}
-                  className="px-3 py-1 rounded text-xs disabled:opacity-40"
-                  style={{ background: '#1c2230', color: '#e8eaf0' }}
-                >
-                  ‹ Prev
-                </button>
-                {Array.from({ length: Math.min(totalPages, 7) }, (_, i) => {
-                  const p = i + 1;
-                  return (
-                    <button
-                      key={p}
-                      onClick={() => setPage(p)}
-                      className="px-3 py-1 rounded text-xs"
-                      style={{
-                        background: p === page ? '#2ea55e' : '#1c2230',
-                        color: p === page ? '#fff' : '#e8eaf0',
-                      }}
-                    >
-                      {p}
-                    </button>
-                  );
-                })}
-                <button
-                  onClick={() => setPage(Math.min(totalPages, page + 1))}
-                  disabled={page === totalPages}
-                  className="px-3 py-1 rounded text-xs disabled:opacity-40"
-                  style={{ background: '#1c2230', color: '#e8eaf0' }}
-                >
-                  Next ›
-                </button>
+          {/* Sort toggle */}
+          <div className="px-4 pb-3 flex items-center gap-2">
+            <span className="text-xs" style={{ color: '#8892a4' }}>Sort:</span>
+            {(['severity', 'score'] as const).map((mode) => (
+              <button
+                key={mode}
+                onClick={() => setSortMode(mode)}
+                className="text-xs px-3 py-1 rounded font-medium transition-colors"
+                style={{
+                  background: sortMode === mode ? '#2ea55e' : 'rgba(255,255,255,0.05)',
+                  color: sortMode === mode ? '#fff' : '#8892a4',
+                }}
+              >
+                {mode === 'severity' ? 'Risk Severity' : 'Risk Score'}
+              </button>
+            ))}
+          </div>
+
+          {/* Client-grouped rows */}
+          <div>
+            {groupedByClient.length === 0 ? (
+              <div className="px-4 py-8 text-center text-sm" style={{ color: '#8892a4' }}>
+                No studies match the current filters.
               </div>
-            </div>
-          )}
+            ) : groupedByClient.map(({ client, studies: clientStudies }) => {
+              const isExpanded = expandedClients.has(client);
+              const riskCounts = clientStudies.reduce((acc, s) => {
+                acc[s.risk_tier] = (acc[s.risk_tier] || 0) + 1;
+                return acc;
+              }, {} as Record<string, number>);
+              const cAvgProd = clientStudies.reduce((a, s) => a + s.prod_pct, 0) / clientStudies.length;
+              const cAvgQc = clientStudies.reduce((a, s) => a + s.qc_pct, 0) / clientStudies.length;
+
+              return (
+                <div key={client} style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+                  {/* Client header row */}
+                  <div
+                    className="flex items-center gap-3 px-4 py-2.5 cursor-pointer transition-colors"
+                    onClick={() => toggleClient(client)}
+                    style={{ background: isExpanded ? 'rgba(46,165,94,0.04)' : 'transparent' }}
+                    onMouseEnter={(e) => { if (!isExpanded) (e.currentTarget as HTMLDivElement).style.background = 'rgba(255,255,255,0.02)'; }}
+                    onMouseLeave={(e) => { if (!isExpanded) (e.currentTarget as HTMLDivElement).style.background = 'transparent'; }}
+                  >
+                    <span className="text-xs font-bold w-4" style={{ color: '#3b82f6' }}>
+                      {isExpanded ? '▼' : '▶'}
+                    </span>
+                    <span className="text-sm font-medium flex-1 min-w-0 truncate" style={{ color: '#e8eaf0' }}>
+                      {client}
+                    </span>
+                    <span className="text-xs flex-shrink-0" style={{ color: '#8892a4' }}>
+                      {clientStudies.length} {clientStudies.length === 1 ? 'study' : 'studies'}
+                    </span>
+                    <div className="flex items-center gap-1 flex-shrink-0">
+                      <span className="text-xs font-medium" style={{ color: '#2ea55e' }}>{cAvgProd.toFixed(0)}%</span>
+                      <span className="text-xs" style={{ color: '#8892a4' }}>/</span>
+                      <span className="text-xs font-medium" style={{ color: '#3b82f6' }}>{cAvgQc.toFixed(0)}%</span>
+                    </div>
+                    <div className="flex items-center gap-1 flex-shrink-0">
+                      {(['Critical', 'High', 'Elevated', 'Moderate', 'Low'] as const)
+                        .filter((t) => riskCounts[t])
+                        .map((tier) => (
+                          <span key={tier} className={`inline-flex items-center gap-0.5 text-xs px-1.5 py-0.5 rounded-full font-medium ${RISK_STYLES[tier]}`}>
+                            {RISK_EMOJI[tier]} {riskCounts[tier]}
+                          </span>
+                        ))}
+                    </div>
+                  </div>
+
+                  {/* Expanded study rows */}
+                  {isExpanded && clientStudies.map((study) => (
+                    <div key={study.study}>
+                      <div
+                        className="flex items-center gap-3 px-4 py-2 cursor-pointer border-t"
+                        style={{
+                          borderColor: 'rgba(255,255,255,0.04)',
+                          background: expandedStudy === study.study ? 'rgba(59,130,246,0.06)' : 'rgba(255,255,255,0.015)',
+                          paddingLeft: '2.5rem',
+                        }}
+                        onClick={() =>
+                          setExpandedStudy(expandedStudy === study.study ? null : study.study)
+                        }
+                        onMouseEnter={(e) => { if (expandedStudy !== study.study) (e.currentTarget as HTMLDivElement).style.background = 'rgba(255,255,255,0.03)'; }}
+                        onMouseLeave={(e) => { if (expandedStudy !== study.study) (e.currentTarget as HTMLDivElement).style.background = 'rgba(255,255,255,0.015)'; }}
+                      >
+                        <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${RISK_STYLES[study.risk_tier]}`}>
+                          {RISK_EMOJI[study.risk_tier]} {study.risk_tier}
+                        </span>
+                        <span className="text-sm flex-1 min-w-0 truncate" style={{ color: '#e8eaf0' }}>
+                          {study.study}
+                        </span>
+                        <span className="text-xs flex-shrink-0" style={{ color: '#8892a4' }}>
+                          {study.ta}
+                        </span>
+                        <span className="text-xs flex-shrink-0 px-1.5 py-0.5 rounded" style={{
+                          background: study.fso_fsp === 'FSO' ? 'rgba(46,165,94,0.1)' : 'rgba(59,130,246,0.1)',
+                          color: study.fso_fsp === 'FSO' ? '#2ea55e' : '#3b82f6',
+                        }}>
+                          {study.fso_fsp}
+                        </span>
+                        {/* Mini completion bars */}
+                        <div className="flex items-center gap-2 flex-shrink-0 w-48">
+                          <div className="flex-1">
+                            <div className="flex justify-between text-xs mb-0.5">
+                              <span style={{ color: '#8892a4' }}>P</span>
+                              <span style={{ color: '#2ea55e' }}>{study.prod_pct.toFixed(0)}%</span>
+                            </div>
+                            <div className="h-1 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.08)' }}>
+                              <div className="h-full rounded-full" style={{ width: `${study.prod_pct}%`, background: '#2ea55e' }} />
+                            </div>
+                          </div>
+                          <div className="flex-1">
+                            <div className="flex justify-between text-xs mb-0.5">
+                              <span style={{ color: '#8892a4' }}>Q</span>
+                              <span style={{ color: '#3b82f6' }}>{study.qc_pct.toFixed(0)}%</span>
+                            </div>
+                            <div className="h-1 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.08)' }}>
+                              <div className="h-full rounded-full" style={{ width: `${study.qc_pct}%`, background: '#3b82f6' }} />
+                            </div>
+                          </div>
+                        </div>
+                        <span className="text-xs flex-shrink-0" style={{ color: '#8892a4' }}>
+                          {study.dbl ?? '—'}
+                        </span>
+                        <span className="text-xs flex-shrink-0" style={{ color: expandedStudy === study.study ? '#93c5fd' : '#8892a4' }}>
+                          {expandedStudy === study.study ? '▲ hide' : '▼ detail'}
+                        </span>
+                      </div>
+                      {expandedStudy === study.study && (
+                        <div className="px-4 pb-2" style={{ background: 'rgba(255,255,255,0.015)', paddingLeft: '2.5rem' }}>
+                          <DrillDown study={study} onClose={() => setExpandedStudy(null)} />
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              );
+            })}
+          </div>
         </div>
       </main>
     </div>
