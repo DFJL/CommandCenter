@@ -5,7 +5,7 @@ import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
   BarChart, Bar, Cell,
 } from 'recharts';
-import type { Study } from '../types';
+import type { Study, StudyUpdate } from '../types';
 
 const RISK_STYLES: Record<string, string> = {
   Critical: 'bg-red-900/30 text-red-400 border border-red-700/40',
@@ -22,6 +22,33 @@ const RISK_EMOJI: Record<string, string> = {
 const RISK_ORDER: Record<string, number> = {
   Critical: 0, High: 1, Elevated: 2, Moderate: 3, Low: 4,
 };
+
+function scoreTier(score: number): Study['risk_tier'] {
+  if (score > 0.8) return 'Critical';
+  if (score > 0.6) return 'High';
+  if (score > 0.4) return 'Elevated';
+  if (score > 0.2) return 'Moderate';
+  return 'Low';
+}
+
+function effectiveScore(study: Study, updates: StudyUpdate[]): number {
+  const upd = updates.find((u) => u.study === study.study);
+  return Math.min(study.ai_risk_score + (upd?.riskBump ?? 0), 1);
+}
+
+function effectiveTier(study: Study, updates: StudyUpdate[]): Study['risk_tier'] {
+  return scoreTier(effectiveScore(study, updates));
+}
+
+function nextUpcomingMilestone(studyName: string, updates: StudyUpdate[]): { type: string; date: string } | null {
+  const upd = updates.find((u) => u.study === studyName);
+  if (!upd || !Array.isArray(upd.milestones)) return null;
+  const today = '2026-05-28';
+  const upcoming = upd.milestones
+    .filter((m) => m.planned && m.planned >= today)
+    .sort((a, b) => a.planned.localeCompare(b.planned));
+  return upcoming.length > 0 ? { type: upcoming[0].type, date: upcoming[0].planned } : null;
+}
 
 const DEL_TYPES = ['SDTMs', 'ADaMs', 'Tables', 'Listings', 'Figures'] as const;
 
@@ -87,9 +114,9 @@ function StatusBar({ done, inProg, failed, onHold, total }: { done: number; inPr
   );
 }
 
-interface DrillDownProps { study: Study; onClose: () => void; }
+interface DrillDownProps { study: Study; onClose: () => void; effectiveTier: Study['risk_tier']; riskBump: number; }
 
-function DrillDown({ study, onClose }: DrillDownProps) {
+function DrillDown({ study, onClose, effectiveTier: eTier, riskBump }: DrillDownProps) {
   const bd = study.deliverable_breakdown ?? {};
   const presentTypes = DEL_TYPES.filter((t) => bd[t]);
 
@@ -126,8 +153,8 @@ function DrillDown({ study, onClose }: DrillDownProps) {
       <div className="flex items-center justify-between px-5 py-3" style={{ background: '#1a5c38' }}>
         <div className="flex items-center gap-3">
           <span className="text-sm font-bold text-white">{study.study}</span>
-          <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium ${RISK_STYLES[study.risk_tier]}`}>
-            {RISK_EMOJI[study.risk_tier]} {study.risk_tier}
+          <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium ${RISK_STYLES[eTier]}`}>
+            {RISK_EMOJI[eTier]} {eTier}{riskBump > 0 ? ` (+${(riskBump * 100).toFixed(0)}%)` : ''}
           </span>
           <span className="text-xs text-white/60">{study.client} · {study.ta} · {study.fso_fsp}</span>
         </div>
@@ -369,7 +396,7 @@ function DrillDown({ study, onClose }: DrillDownProps) {
 
 type ChatMessage = { role: 'user' | 'assistant'; content: string };
 
-export default function ResultsTab({ studies }: { studies: Study[] }) {
+export default function ResultsTab({ studies, savedUpdates = [] }: { studies: Study[]; savedUpdates?: StudyUpdate[] }) {
   // SCOPE state
   const [allStudies, setAllStudies] = useState(true);
   const [allClients, setAllClients] = useState(true);
@@ -439,14 +466,19 @@ export default function ResultsTab({ studies }: { studies: Study[] }) {
       .map(([client, clientStudies]) => {
         const sorted = [...clientStudies].sort((a, b) =>
           sortMode === 'severity'
-            ? RISK_ORDER[a.risk_tier] - RISK_ORDER[b.risk_tier]
-            : b.ai_risk_score - a.ai_risk_score
+            ? RISK_ORDER[effectiveTier(a, savedUpdates)] - RISK_ORDER[effectiveTier(b, savedUpdates)]
+            : effectiveScore(b, savedUpdates) - effectiveScore(a, savedUpdates)
         );
-        const worstRiskOrder = Math.min(...clientStudies.map((s) => RISK_ORDER[s.risk_tier]));
-        return { client, studies: sorted, worstRiskOrder };
+        const worstRiskOrder = Math.min(...clientStudies.map((s) => RISK_ORDER[effectiveTier(s, savedUpdates)]));
+        const avgScore = clientStudies.reduce((sum, s) => sum + effectiveScore(s, savedUpdates), 0) / clientStudies.length;
+        return { client, studies: sorted, worstRiskOrder, avgScore };
       })
-      .sort((a, b) => a.worstRiskOrder - b.worstRiskOrder);
-  }, [tableFiltered, sortMode]);
+      .sort((a, b) =>
+        sortMode === 'severity'
+          ? a.worstRiskOrder - b.worstRiskOrder
+          : b.avgScore - a.avgScore
+      );
+  }, [tableFiltered, sortMode, savedUpdates]);
 
   const delayed = sidebarFiltered.filter((s) => s.delayed).length;
   const atRisk = sidebarFiltered.filter((s) => s.at_risk).length;
@@ -706,7 +738,10 @@ export default function ResultsTab({ studies }: { studies: Study[] }) {
           <div className="px-4 pb-3 flex items-center gap-2">
             <span className="text-xs" style={{ color: '#8892a4' }}>Sort:</span>
             {(['severity', 'score'] as const).map((mode) => (
-              <button key={mode} onClick={() => setSortMode(mode)} className="text-xs px-3 py-1 rounded font-medium" style={{ background: sortMode === mode ? '#2ea55e' : 'rgba(255,255,255,0.05)', color: sortMode === mode ? '#fff' : '#8892a4' }}>
+              <button key={mode} onClick={() => {
+                setSortMode(mode);
+                setExpandedClients(new Set(tableFiltered.map((s) => s.client)));
+              }} className="text-xs px-3 py-1 rounded font-medium" style={{ background: sortMode === mode ? '#2ea55e' : 'rgba(255,255,255,0.05)', color: sortMode === mode ? '#fff' : '#8892a4' }}>
                 {mode === 'severity' ? 'Risk Severity' : 'Risk Score'}
               </button>
             ))}
@@ -750,7 +785,11 @@ export default function ResultsTab({ studies }: { studies: Study[] }) {
                     </div>
                   </div>
 
-                  {isExpanded && clientStudies.map((study) => (
+                  {isExpanded && clientStudies.map((study) => {
+                    const eTier = effectiveTier(study, savedUpdates);
+                    const bump = savedUpdates.find((u) => u.study === study.study)?.riskBump ?? 0;
+                    const ms = nextUpcomingMilestone(study.study, savedUpdates);
+                    return (
                     <div key={study.study}>
                       <div
                         className="flex items-center gap-3 px-4 py-2 cursor-pointer border-t"
@@ -759,9 +798,17 @@ export default function ResultsTab({ studies }: { studies: Study[] }) {
                         onMouseEnter={(e) => { if (expandedStudy !== study.study) (e.currentTarget as HTMLDivElement).style.background = 'rgba(255,255,255,0.03)'; }}
                         onMouseLeave={(e) => { if (expandedStudy !== study.study) (e.currentTarget as HTMLDivElement).style.background = 'rgba(255,255,255,0.015)'; }}
                       >
-                        <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${RISK_STYLES[study.risk_tier]}`}>
-                          {RISK_EMOJI[study.risk_tier]} {study.risk_tier}
+                        <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${RISK_STYLES[eTier]}`}>
+                          {RISK_EMOJI[eTier]} {eTier}
                         </span>
+                        {bump > 0 && (
+                          <span className="text-xs flex-shrink-0 font-medium" style={{ color: '#ef4444' }}>+{(bump * 100).toFixed(0)}%</span>
+                        )}
+                        {ms && (
+                          <span className="text-xs flex-shrink-0" title={ms.type} style={{ color: '#8892a4' }}>
+                            📅 {ms.date}
+                          </span>
+                        )}
                         <span className="text-sm flex-1 min-w-0 truncate" style={{ color: '#e8eaf0' }}>{study.study}</span>
                         <span className="text-xs flex-shrink-0" style={{ color: '#8892a4' }}>{study.ta}</span>
                         <span className="text-xs flex-shrink-0 px-1.5 py-0.5 rounded" style={{ background: study.fso_fsp === 'FSO' ? 'rgba(46,165,94,0.1)' : 'rgba(59,130,246,0.1)', color: study.fso_fsp === 'FSO' ? '#2ea55e' : '#3b82f6' }}>{study.fso_fsp}</span>
@@ -782,11 +829,12 @@ export default function ResultsTab({ studies }: { studies: Study[] }) {
                       </div>
                       {expandedStudy === study.study && (
                         <div style={{ paddingLeft: '0' }}>
-                          <DrillDown study={study} onClose={() => setExpandedStudy(null)} />
+                          <DrillDown study={study} onClose={() => setExpandedStudy(null)} effectiveTier={eTier} riskBump={bump} />
                         </div>
                       )}
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               );
             })}

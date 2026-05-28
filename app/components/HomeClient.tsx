@@ -63,7 +63,7 @@ export default function HomeClient({ studies, findings }: Props) {
 
       {/* Tab content */}
       <div>
-        {activeTab === 'results' && <ResultsTab studies={studies} />}
+        {activeTab === 'results' && <ResultsTab studies={studies} savedUpdates={updates} />}
         {activeTab === 'inconsistencies' && <InconsistenciesTab findings={findings} />}
         {activeTab === 'updates' && (
           <StudyUpdatesTab studies={studies} onSave={handleSaveUpdate} savedUpdates={updates} />
