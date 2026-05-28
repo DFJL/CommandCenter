@@ -33,9 +33,9 @@ export default function HomeClient({ studies, findings }: Props) {
   };
 
   const tabs: { id: Tab; label: string }[] = [
-    { id: 'results', label: 'Results' },
-    { id: 'inconsistencies', label: 'Data Inconsistencies' },
-    { id: 'updates', label: 'Study Updates' },
+    { id: 'results', label: 'Portfolio' },
+    { id: 'inconsistencies', label: 'Data Quality' },
+    { id: 'updates', label: 'Study Log' },
   ];
 
   return (
