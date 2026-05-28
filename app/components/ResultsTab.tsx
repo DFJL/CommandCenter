@@ -401,21 +401,20 @@ function DrillDown({ study, onClose, effectiveTier: eTier, riskBump }: DrillDown
   );
 }
 
-interface EntityDetailPanelProps {
-  type: 'client' | 'portfolio';
-  value: string;
+interface AllRecordsPanelProps {
+  label: string;
+  labelType?: string;
   studies: Study[];
   savedUpdates: StudyUpdate[];
-  onClose: () => void;
+  onClear?: () => void;
 }
 
-function EntityDetailPanel({ type, value, studies, savedUpdates, onClose }: EntityDetailPanelProps) {
-  const rows = studies.filter((s) => (type === 'client' ? s.client === value : s.portfolio === value));
-  const sorted = [...rows].sort((a, b) => RISK_ORDER[effectiveTier(a, savedUpdates)] - RISK_ORDER[effectiveTier(b, savedUpdates)]);
-  const avgProd = rows.length ? rows.reduce((a, s) => a + s.prod_pct, 0) / rows.length : 0;
-  const avgQc = rows.length ? rows.reduce((a, s) => a + s.qc_pct, 0) / rows.length : 0;
-  const totalFail = rows.reduce((a, s) => a + s.failed_qc, 0);
-  const totalDel = rows.reduce((a, s) => a + s.total_del, 0);
+function AllRecordsPanel({ label, labelType, studies, savedUpdates, onClear }: AllRecordsPanelProps) {
+  const sorted = [...studies].sort((a, b) => RISK_ORDER[effectiveTier(a, savedUpdates)] - RISK_ORDER[effectiveTier(b, savedUpdates)]);
+  const avgProd = studies.length ? studies.reduce((a, s) => a + s.prod_pct, 0) / studies.length : 0;
+  const avgQc = studies.length ? studies.reduce((a, s) => a + s.qc_pct, 0) / studies.length : 0;
+  const totalFail = studies.reduce((a, s) => a + s.failed_qc, 0);
+  const totalDel = studies.reduce((a, s) => a + s.total_del, 0);
   const failPct = totalDel > 0 ? ((totalFail / totalDel) * 100).toFixed(1) : '0';
 
   const colStyle = { color: '#8892a4', fontSize: 10, fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.05em' };
@@ -426,12 +425,12 @@ function EntityDetailPanel({ type, value, studies, savedUpdates, onClose }: Enti
       <div className="flex items-center justify-between px-5 py-3" style={{ background: '#1a5c38', borderRadius: '0.5rem 0.5rem 0 0' }}>
         <div className="flex items-center gap-4">
           <div>
-            <span className="text-xs font-medium uppercase tracking-wider text-white/50">{type} view</span>
-            <p className="text-sm font-bold text-white">{value}</p>
+            {labelType && <span className="text-xs font-medium uppercase tracking-wider text-white/50">{labelType} view</span>}
+            <p className="text-sm font-bold text-white">{label}</p>
           </div>
           <div className="flex items-center gap-5 ml-4">
             <div className="text-center">
-              <p className="text-lg font-bold text-white">{rows.length}</p>
+              <p className="text-lg font-bold text-white">{studies.length}</p>
               <p className="text-xs text-white/60">Studies</p>
             </div>
             <div className="text-center">
@@ -456,7 +455,9 @@ function EntityDetailPanel({ type, value, studies, savedUpdates, onClose }: Enti
             </div>
           </div>
         </div>
-        <button onClick={onClose} className="text-xs px-3 py-1.5 rounded font-medium text-white/70 hover:text-white" style={{ background: 'rgba(255,255,255,0.1)' }}>✕ Close</button>
+        {onClear && (
+          <button onClick={onClear} className="text-xs px-3 py-1.5 rounded font-medium text-white/70 hover:text-white" style={{ background: 'rgba(255,255,255,0.1)' }}>✕ Clear filter</button>
+        )}
       </div>
 
       {/* Table */}
@@ -870,17 +871,6 @@ export default function ResultsTab({ studies, savedUpdates = [] }: { studies: St
               </select>
             </div>
           </div>
-          {focusedEntity && (
-            <div className="px-4 py-2 flex items-center gap-2 mx-0" style={{ background: 'rgba(46,165,94,0.06)', borderBottom: '1px solid rgba(46,165,94,0.15)' }}>
-              <span className="text-xs" style={{ color: '#8892a4' }}>Viewing:</span>
-              <span className="text-xs font-semibold" style={{ color: '#2ea55e' }}>
-                {focusedEntity.type === 'client' ? '👤' : '📁'} {focusedEntity.value}
-              </span>
-              <button onClick={() => { setFocusedEntity(null); if (focusedEntity.type === 'portfolio') { setPortfolioFilter('All'); setAllPortfolios(true); } }} className="text-xs ml-2 px-2 py-0.5 rounded" style={{ color: '#ef4444', background: 'rgba(239,68,68,0.1)' }}>
-                ✕ Clear
-              </button>
-            </div>
-          )}
           <div className="px-4 pb-3 flex items-center gap-2 pt-3">
             <span className="text-xs" style={{ color: '#8892a4' }}>Sort:</span>
             {(['severity', 'score'] as const).map((mode) => (
@@ -994,19 +984,17 @@ export default function ResultsTab({ studies, savedUpdates = [] }: { studies: St
             })}
           </div>
         </div>
-        {/* Entity Detail Panel */}
-        {focusedEntity && (
-          <EntityDetailPanel
-            type={focusedEntity.type}
-            value={focusedEntity.value}
-            studies={sidebarFiltered}
-            savedUpdates={savedUpdates}
-            onClose={() => {
-              setFocusedEntity(null);
-              if (focusedEntity.type === 'portfolio') { setPortfolioFilter('All'); setAllPortfolios(true); }
-            }}
-          />
-        )}
+        {/* All Records panel — always visible, filtered by current scope/NLQ/entity */}
+        <AllRecordsPanel
+          label={focusedEntity ? focusedEntity.value : 'All Records'}
+          labelType={focusedEntity?.type}
+          studies={tableFiltered}
+          savedUpdates={savedUpdates}
+          onClear={focusedEntity ? () => {
+            setFocusedEntity(null);
+            if (focusedEntity.type === 'portfolio') { setPortfolioFilter('All'); setAllPortfolios(true); }
+          } : undefined}
+        />
       </main>
     </div>
   );
