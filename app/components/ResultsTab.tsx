@@ -401,6 +401,102 @@ function DrillDown({ study, onClose, effectiveTier: eTier, riskBump }: DrillDown
   );
 }
 
+interface EntityStudyPanelProps {
+  label: string;
+  labelType: string;
+  studies: Study[];
+  savedUpdates: StudyUpdate[];
+  onClose: () => void;
+}
+
+function EntityStudyPanel({ label, labelType, studies, savedUpdates, onClose }: EntityStudyPanelProps) {
+  const sorted = [...studies].sort((a, b) => RISK_ORDER[effectiveTier(a, savedUpdates)] - RISK_ORDER[effectiveTier(b, savedUpdates)]);
+  const avgProd = studies.length ? studies.reduce((a, s) => a + s.prod_pct, 0) / studies.length : 0;
+  const avgQc = studies.length ? studies.reduce((a, s) => a + s.qc_pct, 0) / studies.length : 0;
+  const totalFail = studies.reduce((a, s) => a + s.failed_qc, 0);
+  const totalDel = studies.reduce((a, s) => a + s.total_del, 0);
+  const failPct = totalDel > 0 ? ((totalFail / totalDel) * 100).toFixed(1) : '0';
+  const colStyle = { color: '#8892a4', fontSize: 10, fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.05em' };
+
+  return (
+    <div className="rounded-lg mt-4" style={{ background: '#161b24', border: '1px solid rgba(255,255,255,0.07)' }}>
+      <div className="flex items-center justify-between px-5 py-3" style={{ background: '#1a5c38', borderRadius: '0.5rem 0.5rem 0 0' }}>
+        <div className="flex items-center gap-4">
+          <div>
+            <span className="text-xs font-medium uppercase tracking-wider text-white/50">{labelType} view</span>
+            <p className="text-sm font-bold text-white">{label}</p>
+          </div>
+          <div className="flex items-center gap-5 ml-4">
+            <div className="text-center"><p className="text-lg font-bold text-white">{studies.length}</p><p className="text-xs text-white/60">Studies</p></div>
+            <div className="text-center"><p className="text-lg font-bold" style={{ color: '#86efac' }}>{avgProd.toFixed(1)}%</p><p className="text-xs text-white/60">Avg Prod</p></div>
+            <div className="text-center"><p className="text-lg font-bold" style={{ color: '#93c5fd' }}>{avgQc.toFixed(1)}%</p><p className="text-xs text-white/60">Avg QC</p></div>
+            <div className="text-center"><p className="text-lg font-bold" style={{ color: totalFail > 0 ? '#fca5a5' : '#86efac' }}>{totalFail} ({failPct}%)</p><p className="text-xs text-white/60">QC Failures</p></div>
+            <div className="flex items-center gap-1">
+              {(['Critical', 'High', 'Elevated', 'Moderate', 'Low'] as const).map((t) => {
+                const cnt = sorted.filter((s) => effectiveTier(s, savedUpdates) === t).length;
+                return cnt > 0 ? <span key={t} className={`text-xs px-1.5 py-0.5 rounded-full ${RISK_STYLES[t]}`}>{RISK_EMOJI[t]} {cnt}</span> : null;
+              })}
+            </div>
+          </div>
+        </div>
+        <button onClick={onClose} className="text-xs px-3 py-1.5 rounded font-medium text-white/70 hover:text-white" style={{ background: 'rgba(255,255,255,0.1)' }}>✕ Close</button>
+      </div>
+      <div style={{ maxHeight: '320px', overflowY: 'auto' }}>
+        <table className="w-full text-xs" style={{ minWidth: 800 }}>
+          <thead style={{ position: 'sticky', top: 0, background: '#1c2230', zIndex: 1 }}>
+            <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
+              {['Study', 'TA', 'Type', 'Risk', 'FPI', 'DBL', 'Wks to DBL', 'Prod %', 'QC %', 'QC Fail (n / %)', 'Sig. Delays'].map((h) => (
+                <th key={h} className="text-left px-3 py-2 whitespace-nowrap" style={colStyle}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {sorted.map((study) => {
+              const eTier = effectiveTier(study, savedUpdates);
+              const bump = savedUpdates.find((u) => u.study === study.study)?.riskBump ?? 0;
+              const sFail = study.total_del > 0 ? ((study.failed_qc / study.total_del) * 100).toFixed(0) : '0';
+              const wkColor = study.weeks_to_dbl !== null && study.weeks_to_dbl <= 4 ? '#ef4444' : study.weeks_to_dbl !== null && study.weeks_to_dbl <= 8 ? '#f97316' : '#8892a4';
+              return (
+                <tr key={study.study} className="hover:bg-white/[0.02] transition-colors" style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                  <td className="px-3 py-2 font-medium whitespace-nowrap" style={{ color: '#e8eaf0' }}>{study.study}</td>
+                  <td className="px-3 py-2 whitespace-nowrap" style={{ color: '#8892a4' }}>{study.ta}</td>
+                  <td className="px-3 py-2">
+                    <span className="px-1.5 py-0.5 rounded text-xs" style={{ background: study.fso_fsp === 'FSO' ? 'rgba(46,165,94,0.1)' : 'rgba(59,130,246,0.1)', color: study.fso_fsp === 'FSO' ? '#2ea55e' : '#3b82f6' }}>{study.fso_fsp}</span>
+                  </td>
+                  <td className="px-3 py-2">
+                    <span className={`inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded-full ${RISK_STYLES[eTier]}`}>
+                      {RISK_EMOJI[eTier]} {eTier}{bump > 0 ? ` +${(bump * 100).toFixed(0)}%` : ''}
+                    </span>
+                  </td>
+                  <td className="px-3 py-2 whitespace-nowrap" style={{ color: '#8892a4' }}>{study.fpi ?? '—'}</td>
+                  <td className="px-3 py-2 whitespace-nowrap" style={{ color: '#8892a4' }}>{study.dbl ?? '—'}</td>
+                  <td className="px-3 py-2 font-medium whitespace-nowrap" style={{ color: wkColor }}>{study.weeks_to_dbl !== null ? study.weeks_to_dbl.toFixed(1) : '—'}</td>
+                  <td className="px-3 py-2">
+                    <div className="flex items-center gap-1.5">
+                      <div className="h-1.5 w-14 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.08)' }}><div className="h-full rounded-full" style={{ width: `${study.prod_pct}%`, background: '#2ea55e' }} /></div>
+                      <span style={{ color: study.prod_pct >= 80 ? '#2ea55e' : study.prod_pct >= 40 ? '#d97706' : '#e8eaf0' }}>{study.prod_pct.toFixed(0)}%</span>
+                    </div>
+                  </td>
+                  <td className="px-3 py-2">
+                    <div className="flex items-center gap-1.5">
+                      <div className="h-1.5 w-14 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.08)' }}><div className="h-full rounded-full" style={{ width: `${study.qc_pct}%`, background: '#3b82f6' }} /></div>
+                      <span style={{ color: study.qc_pct >= 80 ? '#2ea55e' : study.qc_pct >= 40 ? '#d97706' : '#e8eaf0' }}>{study.qc_pct.toFixed(0)}%</span>
+                    </div>
+                  </td>
+                  <td className="px-3 py-2 font-medium" style={{ color: study.failed_qc > 0 ? '#ef4444' : '#2ea55e' }}>
+                    {study.failed_qc > 0 ? `${study.failed_qc} (${sFail}%)` : '0 ✓'}
+                  </td>
+                  <td className="px-3 py-2" style={{ color: study.sig_delays > 0 ? '#f97316' : '#8892a4' }}>{study.sig_delays}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 type DelRow = {
   client: string; portfolio: string; study: string;
   fpi: string | null; dbl: string | null;
@@ -1039,7 +1135,21 @@ export default function ResultsTab({ studies, savedUpdates = [] }: { studies: St
             })}
           </div>
         </div>
-        {/* All Records panel — always visible, filtered by current scope/NLQ/entity/study */}
+        {/* Entity study-level panel — appears when client/portfolio is focused */}
+        {focusedEntity && (
+          <EntityStudyPanel
+            label={focusedEntity.value}
+            labelType={focusedEntity.type}
+            studies={tableFiltered}
+            savedUpdates={savedUpdates}
+            onClose={() => {
+              setFocusedEntity(null);
+              if (focusedEntity.type === 'portfolio') { setPortfolioFilter('All'); setAllPortfolios(true); }
+            }}
+          />
+        )}
+
+        {/* All Records — deliverable-level rows, always visible */}
         <AllRecordsPanel
           label={focusedEntity ? focusedEntity.value : 'All Records'}
           labelType={focusedEntity?.type}
