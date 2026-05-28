@@ -3,3 +3,6 @@ data/data_entry.db
 .Rhistory
 .Rdata
 *.Rproj.user
+web/node_modules/
+web/.next/
+web/.env
