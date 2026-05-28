@@ -40,14 +40,21 @@ function effectiveTier(study: Study, updates: StudyUpdate[]): Study['risk_tier']
   return scoreTier(effectiveScore(study, updates));
 }
 
-function nextUpcomingMilestone(studyName: string, updates: StudyUpdate[]): { type: string; date: string } | null {
-  const upd = updates.find((u) => u.study === studyName);
-  if (!upd || !Array.isArray(upd.milestones)) return null;
+function nextUpcomingMilestone(study: Study, updates: StudyUpdate[]): { type: string; date: string } | null {
   const today = '2026-05-28';
-  const upcoming = upd.milestones
-    .filter((m) => m.planned && m.planned >= today)
-    .sort((a, b) => a.planned.localeCompare(b.planned));
-  return upcoming.length > 0 ? { type: upcoming[0].type, date: upcoming[0].planned } : null;
+  const upd = updates.find((u) => u.study === study.study);
+  if (upd && Array.isArray(upd.milestones)) {
+    const upcoming = upd.milestones
+      .filter((m) => m.planned && m.planned >= today)
+      .sort((a, b) => a.planned.localeCompare(b.planned));
+    if (upcoming.length > 0) return { type: upcoming[0].type, date: upcoming[0].planned };
+  }
+  // Fall back to study's built-in dates
+  const candidates: { type: string; date: string }[] = [];
+  if (study.fpi && study.fpi >= today) candidates.push({ type: 'FPI', date: study.fpi });
+  if (study.dbl && study.dbl >= today) candidates.push({ type: 'DBL', date: study.dbl });
+  candidates.sort((a, b) => a.date.localeCompare(b.date));
+  return candidates.length > 0 ? candidates[0] : null;
 }
 
 const DEL_TYPES = ['SDTMs', 'ADaMs', 'Tables', 'Listings', 'Figures'] as const;
@@ -394,6 +401,125 @@ function DrillDown({ study, onClose, effectiveTier: eTier, riskBump }: DrillDown
   );
 }
 
+interface EntityDetailPanelProps {
+  type: 'client' | 'portfolio';
+  value: string;
+  studies: Study[];
+  savedUpdates: StudyUpdate[];
+  onClose: () => void;
+}
+
+function EntityDetailPanel({ type, value, studies, savedUpdates, onClose }: EntityDetailPanelProps) {
+  const rows = studies.filter((s) => (type === 'client' ? s.client === value : s.portfolio === value));
+  const sorted = [...rows].sort((a, b) => RISK_ORDER[effectiveTier(a, savedUpdates)] - RISK_ORDER[effectiveTier(b, savedUpdates)]);
+  const avgProd = rows.length ? rows.reduce((a, s) => a + s.prod_pct, 0) / rows.length : 0;
+  const avgQc = rows.length ? rows.reduce((a, s) => a + s.qc_pct, 0) / rows.length : 0;
+  const totalFail = rows.reduce((a, s) => a + s.failed_qc, 0);
+  const totalDel = rows.reduce((a, s) => a + s.total_del, 0);
+  const failPct = totalDel > 0 ? ((totalFail / totalDel) * 100).toFixed(1) : '0';
+
+  const colStyle = { color: '#8892a4', fontSize: 10, fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.05em' };
+
+  return (
+    <div className="rounded-lg mt-4" style={{ background: '#161b24', border: '1px solid rgba(255,255,255,0.07)' }}>
+      {/* Header */}
+      <div className="flex items-center justify-between px-5 py-3" style={{ background: '#1a5c38', borderRadius: '0.5rem 0.5rem 0 0' }}>
+        <div className="flex items-center gap-4">
+          <div>
+            <span className="text-xs font-medium uppercase tracking-wider text-white/50">{type} view</span>
+            <p className="text-sm font-bold text-white">{value}</p>
+          </div>
+          <div className="flex items-center gap-5 ml-4">
+            <div className="text-center">
+              <p className="text-lg font-bold text-white">{rows.length}</p>
+              <p className="text-xs text-white/60">Studies</p>
+            </div>
+            <div className="text-center">
+              <p className="text-lg font-bold" style={{ color: '#86efac' }}>{avgProd.toFixed(1)}%</p>
+              <p className="text-xs text-white/60">Avg Prod</p>
+            </div>
+            <div className="text-center">
+              <p className="text-lg font-bold" style={{ color: '#93c5fd' }}>{avgQc.toFixed(1)}%</p>
+              <p className="text-xs text-white/60">Avg QC</p>
+            </div>
+            <div className="text-center">
+              <p className="text-lg font-bold" style={{ color: totalFail > 0 ? '#fca5a5' : '#86efac' }}>{totalFail} ({failPct}%)</p>
+              <p className="text-xs text-white/60">QC Failures</p>
+            </div>
+            <div className="flex items-center gap-1">
+              {(['Critical', 'High', 'Elevated', 'Moderate', 'Low'] as const).map((t) => {
+                const cnt = sorted.filter((s) => effectiveTier(s, savedUpdates) === t).length;
+                return cnt > 0 ? (
+                  <span key={t} className={`text-xs px-1.5 py-0.5 rounded-full ${RISK_STYLES[t]}`}>{RISK_EMOJI[t]} {cnt}</span>
+                ) : null;
+              })}
+            </div>
+          </div>
+        </div>
+        <button onClick={onClose} className="text-xs px-3 py-1.5 rounded font-medium text-white/70 hover:text-white" style={{ background: 'rgba(255,255,255,0.1)' }}>✕ Close</button>
+      </div>
+
+      {/* Table */}
+      <div className="overflow-x-auto">
+        <table className="w-full text-xs">
+          <thead>
+            <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
+              {['Study', 'TA', 'Type', 'Risk', 'FPI', 'DBL', 'Wks to DBL', 'Prod %', 'QC %', 'QC Fail (n / %)', 'Sig. Delays'].map((h) => (
+                <th key={h} className="text-left px-3 py-2" style={colStyle}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {sorted.map((study) => {
+              const eTier = effectiveTier(study, savedUpdates);
+              const bump = savedUpdates.find((u) => u.study === study.study)?.riskBump ?? 0;
+              const sFail = study.total_del > 0 ? ((study.failed_qc / study.total_del) * 100).toFixed(0) : '0';
+              const wkColor = study.weeks_to_dbl !== null && study.weeks_to_dbl <= 4 ? '#ef4444' : study.weeks_to_dbl !== null && study.weeks_to_dbl <= 8 ? '#f97316' : '#8892a4';
+              return (
+                <tr key={study.study} className="hover:bg-white/[0.02] transition-colors" style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                  <td className="px-3 py-2 font-medium" style={{ color: '#e8eaf0' }}>{study.study}</td>
+                  <td className="px-3 py-2" style={{ color: '#8892a4' }}>{study.ta}</td>
+                  <td className="px-3 py-2">
+                    <span className="px-1.5 py-0.5 rounded text-xs" style={{ background: study.fso_fsp === 'FSO' ? 'rgba(46,165,94,0.1)' : 'rgba(59,130,246,0.1)', color: study.fso_fsp === 'FSO' ? '#2ea55e' : '#3b82f6' }}>{study.fso_fsp}</span>
+                  </td>
+                  <td className="px-3 py-2">
+                    <span className={`inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded-full ${RISK_STYLES[eTier]}`}>
+                      {RISK_EMOJI[eTier]} {eTier}{bump > 0 ? ` +${(bump * 100).toFixed(0)}%` : ''}
+                    </span>
+                  </td>
+                  <td className="px-3 py-2" style={{ color: '#8892a4' }}>{study.fpi ?? '—'}</td>
+                  <td className="px-3 py-2" style={{ color: '#8892a4' }}>{study.dbl ?? '—'}</td>
+                  <td className="px-3 py-2 font-medium" style={{ color: wkColor }}>{study.weeks_to_dbl !== null ? study.weeks_to_dbl.toFixed(1) : '—'}</td>
+                  <td className="px-3 py-2">
+                    <div className="flex items-center gap-1.5">
+                      <div className="h-1.5 w-14 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.08)' }}>
+                        <div className="h-full rounded-full" style={{ width: `${study.prod_pct}%`, background: '#2ea55e' }} />
+                      </div>
+                      <span style={{ color: study.prod_pct >= 80 ? '#2ea55e' : study.prod_pct >= 40 ? '#d97706' : '#e8eaf0' }}>{study.prod_pct.toFixed(0)}%</span>
+                    </div>
+                  </td>
+                  <td className="px-3 py-2">
+                    <div className="flex items-center gap-1.5">
+                      <div className="h-1.5 w-14 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.08)' }}>
+                        <div className="h-full rounded-full" style={{ width: `${study.qc_pct}%`, background: '#3b82f6' }} />
+                      </div>
+                      <span style={{ color: study.qc_pct >= 80 ? '#2ea55e' : study.qc_pct >= 40 ? '#d97706' : '#e8eaf0' }}>{study.qc_pct.toFixed(0)}%</span>
+                    </div>
+                  </td>
+                  <td className="px-3 py-2 font-medium" style={{ color: study.failed_qc > 0 ? '#ef4444' : '#2ea55e' }}>
+                    {study.failed_qc > 0 ? `${study.failed_qc} (${sFail}%)` : '0 ✓'}
+                  </td>
+                  <td className="px-3 py-2" style={{ color: study.sig_delays > 0 ? '#f97316' : '#8892a4' }}>{study.sig_delays}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 type ChatMessage = { role: 'user' | 'assistant'; content: string };
 
 export default function ResultsTab({ studies, savedUpdates = [] }: { studies: Study[]; savedUpdates?: StudyUpdate[] }) {
@@ -419,6 +545,7 @@ export default function ResultsTab({ studies, savedUpdates = [] }: { studies: St
   const [expandedClients, setExpandedClients] = useState<Set<string>>(new Set());
   const [expandedStudy, setExpandedStudy] = useState<string | null>(null);
   const [downloadToast, setDownloadToast] = useState(false);
+  const [focusedEntity, setFocusedEntity] = useState<{ type: 'client' | 'portfolio'; value: string } | null>(null);
 
   const clients = useMemo(
     () => ['All', ...Array.from(new Set(studies.map((s) => s.client))).sort()],
@@ -453,8 +580,13 @@ export default function ResultsTab({ studies, savedUpdates = [] }: { studies: St
     if (clientTableFilter !== 'All') {
       filtered = filtered.filter((s) => s.client === clientTableFilter);
     }
+    if (focusedEntity) {
+      filtered = filtered.filter((s) =>
+        focusedEntity.type === 'client' ? s.client === focusedEntity.value : s.portfolio === focusedEntity.value
+      );
+    }
     return filtered;
-  }, [nlqFiltered, tableSearch, clientTableFilter]);
+  }, [nlqFiltered, tableSearch, clientTableFilter, focusedEntity]);
 
   const groupedByClient = useMemo(() => {
     const groups: Record<string, Study[]> = {};
@@ -564,7 +696,10 @@ export default function ResultsTab({ studies, savedUpdates = [] }: { studies: St
               <div className="flex flex-col gap-1.5 ml-4 mt-1">
                 {portfolios.map((p) => (
                   <label key={p} className="flex items-center gap-2 cursor-pointer">
-                    <input type="radio" name="portfolio" checked={portfolioFilter === p} onChange={() => setPortfolioFilter(p)} className="accent-green-500" />
+                    <input type="radio" name="portfolio" checked={portfolioFilter === p} onChange={() => {
+                      setPortfolioFilter(p);
+                      setFocusedEntity({ type: 'portfolio', value: p });
+                    }} className="accent-green-500" />
                     <span className="text-xs" style={{ color: portfolioFilter === p ? '#2ea55e' : '#e8eaf0' }}>{p.replace(' Portfolio', '')}</span>
                   </label>
                 ))}
@@ -735,7 +870,18 @@ export default function ResultsTab({ studies, savedUpdates = [] }: { studies: St
               </select>
             </div>
           </div>
-          <div className="px-4 pb-3 flex items-center gap-2">
+          {focusedEntity && (
+            <div className="px-4 py-2 flex items-center gap-2 mx-0" style={{ background: 'rgba(46,165,94,0.06)', borderBottom: '1px solid rgba(46,165,94,0.15)' }}>
+              <span className="text-xs" style={{ color: '#8892a4' }}>Viewing:</span>
+              <span className="text-xs font-semibold" style={{ color: '#2ea55e' }}>
+                {focusedEntity.type === 'client' ? '👤' : '📁'} {focusedEntity.value}
+              </span>
+              <button onClick={() => { setFocusedEntity(null); if (focusedEntity.type === 'portfolio') { setPortfolioFilter('All'); setAllPortfolios(true); } }} className="text-xs ml-2 px-2 py-0.5 rounded" style={{ color: '#ef4444', background: 'rgba(239,68,68,0.1)' }}>
+                ✕ Clear
+              </button>
+            </div>
+          )}
+          <div className="px-4 pb-3 flex items-center gap-2 pt-3">
             <span className="text-xs" style={{ color: '#8892a4' }}>Sort:</span>
             {(['severity', 'score'] as const).map((mode) => (
               <button key={mode} onClick={() => {
@@ -763,8 +909,11 @@ export default function ResultsTab({ studies, savedUpdates = [] }: { studies: St
                 <div key={client} style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}>
                   <div
                     className="flex items-center gap-3 px-4 py-2.5 cursor-pointer"
-                    onClick={() => toggleClient(client)}
-                    style={{ background: isExpanded ? 'rgba(46,165,94,0.04)' : 'transparent' }}
+                    onClick={() => {
+                      toggleClient(client);
+                      setFocusedEntity((prev) => prev?.type === 'client' && prev.value === client ? null : { type: 'client', value: client });
+                    }}
+                    style={{ background: focusedEntity?.value === client ? 'rgba(46,165,94,0.08)' : isExpanded ? 'rgba(46,165,94,0.04)' : 'transparent' }}
                     onMouseEnter={(e) => { if (!isExpanded) (e.currentTarget as HTMLDivElement).style.background = 'rgba(255,255,255,0.02)'; }}
                     onMouseLeave={(e) => { if (!isExpanded) (e.currentTarget as HTMLDivElement).style.background = 'transparent'; }}
                   >
@@ -788,7 +937,7 @@ export default function ResultsTab({ studies, savedUpdates = [] }: { studies: St
                   {isExpanded && clientStudies.map((study) => {
                     const eTier = effectiveTier(study, savedUpdates);
                     const bump = savedUpdates.find((u) => u.study === study.study)?.riskBump ?? 0;
-                    const ms = nextUpcomingMilestone(study.study, savedUpdates);
+                    const ms = nextUpcomingMilestone(study, savedUpdates);
                     return (
                     <div key={study.study}>
                       <div
@@ -822,6 +971,11 @@ export default function ResultsTab({ studies, savedUpdates = [] }: { studies: St
                             <div className="h-1 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.08)' }}><div className="h-full rounded-full" style={{ width: `${study.qc_pct}%`, background: '#3b82f6' }} /></div>
                           </div>
                         </div>
+                        {study.failed_qc > 0 && (
+                          <span className="text-xs flex-shrink-0 font-medium" title="QC Failures" style={{ color: '#ef4444' }}>
+                            {study.failed_qc}✗
+                          </span>
+                        )}
                         <span className="text-xs flex-shrink-0" style={{ color: '#8892a4' }}>{study.dbl ?? '—'}</span>
                         <span className="text-xs flex-shrink-0" style={{ color: expandedStudy === study.study ? '#93c5fd' : '#8892a4' }}>
                           {expandedStudy === study.study ? '▲ hide' : '▼ detail'}
@@ -840,6 +994,19 @@ export default function ResultsTab({ studies, savedUpdates = [] }: { studies: St
             })}
           </div>
         </div>
+        {/* Entity Detail Panel */}
+        {focusedEntity && (
+          <EntityDetailPanel
+            type={focusedEntity.type}
+            value={focusedEntity.value}
+            studies={sidebarFiltered}
+            savedUpdates={savedUpdates}
+            onClose={() => {
+              setFocusedEntity(null);
+              if (focusedEntity.type === 'portfolio') { setPortfolioFilter('All'); setAllPortfolios(true); }
+            }}
+          />
+        )}
       </main>
     </div>
   );
