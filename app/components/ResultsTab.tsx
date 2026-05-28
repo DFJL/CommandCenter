@@ -23,6 +23,18 @@ const RISK_ORDER: Record<string, number> = {
   Critical: 0, High: 1, Elevated: 2, Moderate: 3, Low: 4,
 };
 
+function InfoTip({ text }: { text: string }) {
+  return (
+    <span className="relative group inline-flex items-center ml-1 cursor-help" style={{ color: '#6b7280', fontSize: 9 }}>
+      ⓘ
+      <span className="absolute bottom-full left-1/2 pointer-events-none z-50 opacity-0 group-hover:opacity-100 transition-opacity"
+        style={{ transform: 'translateX(-50%)', marginBottom: 4, background: '#1c2230', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 4, padding: '4px 8px', color: '#e8eaf0', fontSize: 10, whiteSpace: 'nowrap', minWidth: 180, maxWidth: 260, lineHeight: 1.4 }}>
+        {text}
+      </span>
+    </span>
+  );
+}
+
 function scoreTier(score: number): Study['risk_tier'] {
   if (score > 0.8) return 'Critical';
   if (score > 0.6) return 'High';
@@ -31,9 +43,33 @@ function scoreTier(score: number): Study['risk_tier'] {
   return 'Low';
 }
 
+function computeAiScore(study: Study): number {
+  // Schedule pressure — exponential cliff near DBL
+  const schedPressure = (() => {
+    if (study.weeks_to_dbl === null) return 0.25;
+    if (study.weeks_to_dbl < 0) return 1.0;
+    if (study.weeks_to_dbl <= 4) return 0.75 + (4 - study.weeks_to_dbl) * 0.05;
+    if (study.weeks_to_dbl <= 8) return 0.45 + (8 - study.weeks_to_dbl) * 0.075;
+    return Math.max(0.05, 0.35 - (study.weeks_to_dbl - 8) * 0.006);
+  })();
+  const qcGap = study.qc_pct < 80 ? Math.pow((80 - study.qc_pct) / 80, 0.7) : 0;
+  const prodGap = study.prod_pct < 80 ? Math.pow((80 - study.prod_pct) / 80, 0.8) : 0;
+  const failRate = study.total_del > 0 ? Math.min(study.failed_qc / study.total_del, 1) : 0;
+  const delayScore = Math.min(study.sig_delays / 25, 1);
+  const raw =
+    schedPressure * 0.28 +
+    qcGap * 0.22 +
+    failRate * 0.18 +
+    prodGap * 0.12 +
+    delayScore * 0.10 +
+    (study.at_risk ? 0.06 : 0) +
+    (study.delayed ? 0.04 : 0);
+  return Math.min(Math.max(+raw.toFixed(3), 0.02), 0.98);
+}
+
 function effectiveScore(study: Study, updates: StudyUpdate[]): number {
   const upd = updates.find((u) => u.study === study.study);
-  return Math.min(study.ai_risk_score + (upd?.riskBump ?? 0), 1);
+  return Math.min(computeAiScore(study) + (upd?.riskBump ?? 0), 1);
 }
 
 function effectiveTier(study: Study, updates: StudyUpdate[]): Study['risk_tier'] {
@@ -255,24 +291,38 @@ function DrillDown({ study, onClose, effectiveTier: eTier, riskBump }: DrillDown
           </div>
 
           <div className="rounded p-3" style={{ background: 'rgba(59,130,246,0.06)', border: '1px solid rgba(59,130,246,0.2)' }}>
-            <p className="text-xs font-bold uppercase tracking-wider mb-3" style={{ color: '#3b82f6' }}>AI Risk Model</p>
+            <p className="text-xs font-bold uppercase tracking-wider mb-3" style={{ color: '#3b82f6' }}>Risk Model</p>
             <div className="space-y-2 mb-3">
-              {[{ label: 'AI Risk Score', value: study.ai_risk_score, color: '#3b82f6' }, { label: 'Rule-Based', value: study.risk_score, color: '#8892a4' }].map((m) => (
+              {[
+                { label: 'ML Score', value: computeAiScore(study), color: '#3b82f6', tip: 'Feature-engineered composite: schedule pressure (28%), QC gap (22%), failure rate (18%), production gap (12%), delay score (10%), risk flags (10%)' },
+                { label: 'Rule-Based', value: study.risk_score, color: '#8892a4', tip: 'Weighted sum of discrete risk flags: missed milestones, QC threshold breaches, overdue deliverables' },
+              ].map((m) => (
                 <div key={m.label}>
-                  <div className="flex justify-between text-xs mb-1"><span style={{ color: '#8892a4' }}>{m.label}</span><span style={{ color: m.color }}>{(m.value * 100).toFixed(0)}%</span></div>
+                  <div className="flex justify-between text-xs mb-1">
+                    <span style={{ color: '#8892a4' }}>{m.label}<InfoTip text={m.tip} /></span>
+                    <span style={{ color: m.color }}>{(m.value * 100).toFixed(0)}%</span>
+                  </div>
                   <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.08)' }}><div className="h-full rounded-full" style={{ width: `${m.value * 100}%`, background: m.color }} /></div>
                 </div>
               ))}
             </div>
             <div className="space-y-1 mt-3 pt-2 border-t" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
-              <p className="text-xs mb-1" style={{ color: '#8892a4' }}>Key metrics</p>
-              {[{ label: 'Sig. Delays', value: study.sig_delays }, { label: 'Failed QC', value: study.failed_qc }, { label: 'Wks to DBL', value: study.weeks_to_dbl !== null ? study.weeks_to_dbl.toFixed(1) : 'N/A' }, { label: 'Total del.', value: study.total_del }].map((m) => (
-                <div key={m.label} className="flex justify-between text-xs"><span style={{ color: '#8892a4' }}>{m.label}</span><span style={{ color: '#e8eaf0' }}>{m.value}</span></div>
+              <p className="text-xs mb-1" style={{ color: '#8892a4' }}>Key inputs</p>
+              {[
+                { label: 'Sig. Delays', value: study.sig_delays, tip: 'Deliverables ≥2 weeks past their planned delivery date' },
+                { label: 'Failed QC', value: study.failed_qc, tip: 'Deliverables that failed QC review and require rework' },
+                { label: 'Wks to DBL', value: study.weeks_to_dbl !== null ? study.weeks_to_dbl.toFixed(1) : 'N/A', tip: 'Weeks remaining until Database Lock. Negative = already past target date' },
+                { label: 'Total del.', value: study.total_del, tip: 'Total planned deliverables: SDTMs + ADaMs + Tables + Listings + Figures' },
+              ].map((m) => (
+                <div key={m.label} className="flex justify-between text-xs">
+                  <span style={{ color: '#8892a4' }}>{m.label}<InfoTip text={m.tip} /></span>
+                  <span style={{ color: '#e8eaf0' }}>{m.value}</span>
+                </div>
               ))}
             </div>
             {topFactors.length > 0 && (
               <div className="mt-2 pt-2 border-t" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
-                <p className="text-xs mb-1.5" style={{ color: '#8892a4' }}>Top risk factors</p>
+                <p className="text-xs mb-1.5" style={{ color: '#8892a4' }}>Top risk drivers<InfoTip text="Rule-based risk factor contributions — individual signals that push the overall score up" /></p>
                 {topFactors.map((f) => (
                   <div key={f.label} className="mb-1.5">
                     <div className="flex justify-between text-xs mb-0.5"><span style={{ color: '#8892a4' }}>{f.label}</span><span style={{ color: '#3b82f6' }}>{(f.value * 100).toFixed(0)}%</span></div>
@@ -490,7 +540,7 @@ function AllRecordsPanel({ label, studies, filterStudy, granularMode, onClear, o
             <button onClick={clearCols} className="text-xs px-2.5 py-1 rounded font-medium" style={{ background: 'rgba(239,68,68,0.12)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.25)' }}>↺ Clear col filters</button>
           )}
           {onClear && (
-            <button onClick={onClear} className="text-xs px-3 py-1.5 rounded font-medium text-white/70 hover:text-white" style={{ background: 'rgba(255,255,255,0.15)' }}>✕ Clear study</button>
+            <button onClick={onClear} className="text-xs px-3 py-1.5 rounded font-medium text-white/70 hover:text-white" style={{ background: 'rgba(255,255,255,0.15)' }}>✕ Clear filter</button>
           )}
         </div>
       </div>
@@ -687,6 +737,21 @@ export default function ResultsTab({ studies, savedUpdates = [] }: { studies: St
   const avgQc = sidebarFiltered.length > 0 ? sidebarFiltered.reduce((a, s) => a + s.qc_pct, 0) / sidebarFiltered.length : 0;
 
   // Chart scopes to selected study > expanded client(s) > all filtered studies
+  // Bottom panel scope: selected study > expanded client(s) > all filtered
+  const bottomPanelStudies = useMemo(() => {
+    if (selectedStudy) return tableFiltered;
+    if (expandedClients.size > 0) return tableFiltered.filter((s) => expandedClients.has(s.client));
+    return tableFiltered;
+  }, [tableFiltered, selectedStudy, expandedClients]);
+
+  const bottomPanelLabel = selectedStudy
+    ? selectedStudy
+    : expandedClients.size === 1
+    ? [...expandedClients][0]
+    : expandedClients.size > 1
+    ? `${expandedClients.size} clients`
+    : 'All Records';
+
   const chartStudies = useMemo(() => {
     if (selectedStudy) return tableFiltered.filter((s) => s.study === selectedStudy);
     if (expandedClients.size > 0) return tableFiltered.filter((s) => expandedClients.has(s.client));
@@ -835,7 +900,39 @@ export default function ResultsTab({ studies, savedUpdates = [] }: { studies: St
 
       {/* Main Content */}
       <main className="flex-1 p-5 space-y-4 min-w-0">
-        {/* NLQ Chat */}
+        {/* KPI Row */}
+        <div className="grid grid-cols-5 gap-3">
+          <div className="rounded-lg p-4 text-center" style={{ background: '#161b24', border: '1px solid rgba(255,255,255,0.07)' }}>
+            <div className="text-2xl font-bold" style={{ color: '#e8eaf0' }}>{sidebarFiltered.length}</div>
+            <div className="text-xs mt-1" style={{ color: '#8892a4' }}>Total Studies</div>
+          </div>
+          <div className="rounded-lg p-4 text-center" style={{ background: '#161b24', border: '1px solid rgba(255,255,255,0.07)' }}>
+            <div className="text-2xl font-bold" style={{ color: '#dc2626' }}>{delayed}</div>
+            <div className="text-xs mt-1" style={{ color: '#8892a4' }}>Delayed</div>
+          </div>
+          <div className="rounded-lg p-4 text-center" style={{ background: '#161b24', border: '1px solid rgba(255,255,255,0.07)' }}>
+            <div className="text-2xl font-bold" style={{ color: '#f97316' }}>{atRisk}</div>
+            <div className="text-xs mt-1" style={{ color: '#8892a4' }}>At-Risk</div>
+          </div>
+          <div className="rounded-lg px-4 pt-3 pb-2" style={{ background: '#161b24', border: '1px solid rgba(255,255,255,0.07)' }}>
+            <div className="flex items-end justify-between mb-1">
+              <div className="text-2xl font-bold" style={{ color: '#2ea55e' }}>{avgProd.toFixed(1)}%</div>
+              <span className="text-xs mb-1" style={{ color: trendDeltaProd >= 0 ? '#22c55e' : '#ef4444' }}>{trendDeltaProd >= 0 ? '↑' : '↓'} {Math.abs(trendDeltaProd)}% vs prev</span>
+            </div>
+            <div className="h-1.5 rounded-full overflow-hidden mb-1.5" style={{ background: 'rgba(255,255,255,0.08)' }}><div className="h-full rounded-full" style={{ width: `${Math.min(avgProd, 100)}%`, background: '#2ea55e' }} /></div>
+            <div className="text-xs" style={{ color: '#8892a4' }}>Production Done</div>
+          </div>
+          <div className="rounded-lg px-4 pt-3 pb-2" style={{ background: '#161b24', border: '1px solid rgba(255,255,255,0.07)' }}>
+            <div className="flex items-end justify-between mb-1">
+              <div className="text-2xl font-bold" style={{ color: '#3b82f6' }}>{avgQc.toFixed(1)}%</div>
+              <span className="text-xs mb-1" style={{ color: trendDeltaQc >= 0 ? '#22c55e' : '#ef4444' }}>{trendDeltaQc >= 0 ? '↑' : '↓'} {Math.abs(trendDeltaQc)}% vs prev</span>
+            </div>
+            <div className="h-1.5 rounded-full overflow-hidden mb-1.5" style={{ background: 'rgba(255,255,255,0.08)' }}><div className="h-full rounded-full" style={{ width: `${Math.min(avgQc, 100)}%`, background: '#3b82f6' }} /></div>
+            <div className="text-xs" style={{ color: '#8892a4' }}>QC Done</div>
+          </div>
+        </div>
+
+        {/* AI Query */}
         <div className="rounded-lg" style={{ background: '#161b24', border: '1px solid rgba(255,255,255,0.07)' }}>
           <div className="px-4 pt-3 pb-2 flex items-center justify-between">
             <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: '#8892a4' }}>AI Query</p>
@@ -875,38 +972,6 @@ export default function ResultsTab({ studies, savedUpdates = [] }: { studies: St
                 ))}
               </div>
             )}
-          </div>
-        </div>
-
-        {/* KPI Row */}
-        <div className="grid grid-cols-5 gap-3">
-          <div className="rounded-lg p-4 text-center" style={{ background: '#161b24', border: '1px solid rgba(255,255,255,0.07)' }}>
-            <div className="text-2xl font-bold" style={{ color: '#e8eaf0' }}>{sidebarFiltered.length}</div>
-            <div className="text-xs mt-1" style={{ color: '#8892a4' }}>Total Studies</div>
-          </div>
-          <div className="rounded-lg p-4 text-center" style={{ background: '#161b24', border: '1px solid rgba(255,255,255,0.07)' }}>
-            <div className="text-2xl font-bold" style={{ color: '#dc2626' }}>{delayed}</div>
-            <div className="text-xs mt-1" style={{ color: '#8892a4' }}>Delayed</div>
-          </div>
-          <div className="rounded-lg p-4 text-center" style={{ background: '#161b24', border: '1px solid rgba(255,255,255,0.07)' }}>
-            <div className="text-2xl font-bold" style={{ color: '#f97316' }}>{atRisk}</div>
-            <div className="text-xs mt-1" style={{ color: '#8892a4' }}>At-Risk</div>
-          </div>
-          <div className="rounded-lg px-4 pt-3 pb-2" style={{ background: '#161b24', border: '1px solid rgba(255,255,255,0.07)' }}>
-            <div className="flex items-end justify-between mb-1">
-              <div className="text-2xl font-bold" style={{ color: '#2ea55e' }}>{avgProd.toFixed(1)}%</div>
-              <span className="text-xs mb-1" style={{ color: trendDeltaProd >= 0 ? '#22c55e' : '#ef4444' }}>{trendDeltaProd >= 0 ? '↑' : '↓'} {Math.abs(trendDeltaProd)}% vs prev</span>
-            </div>
-            <div className="h-1.5 rounded-full overflow-hidden mb-1.5" style={{ background: 'rgba(255,255,255,0.08)' }}><div className="h-full rounded-full" style={{ width: `${Math.min(avgProd, 100)}%`, background: '#2ea55e' }} /></div>
-            <div className="text-xs" style={{ color: '#8892a4' }}>Production Done</div>
-          </div>
-          <div className="rounded-lg px-4 pt-3 pb-2" style={{ background: '#161b24', border: '1px solid rgba(255,255,255,0.07)' }}>
-            <div className="flex items-end justify-between mb-1">
-              <div className="text-2xl font-bold" style={{ color: '#3b82f6' }}>{avgQc.toFixed(1)}%</div>
-              <span className="text-xs mb-1" style={{ color: trendDeltaQc >= 0 ? '#22c55e' : '#ef4444' }}>{trendDeltaQc >= 0 ? '↑' : '↓'} {Math.abs(trendDeltaQc)}% vs prev</span>
-            </div>
-            <div className="h-1.5 rounded-full overflow-hidden mb-1.5" style={{ background: 'rgba(255,255,255,0.08)' }}><div className="h-full rounded-full" style={{ width: `${Math.min(avgQc, 100)}%`, background: '#3b82f6' }} /></div>
-            <div className="text-xs" style={{ color: '#8892a4' }}>QC Done</div>
           </div>
         </div>
 
@@ -1122,14 +1187,20 @@ export default function ResultsTab({ studies, savedUpdates = [] }: { studies: St
           </div>
         </div>
 
-        {/* All Records */}
+        {/* Deliverable Tracker */}
         <AllRecordsPanel
-          label={selectedStudy ?? 'All Records'}
-          studies={tableFiltered}
+          label={bottomPanelLabel}
+          studies={bottomPanelStudies}
           filterStudy={selectedStudy}
           granularMode={granularMode}
           onGranularToggle={() => setGranularMode((g) => !g)}
-          onClear={selectedStudy ? () => { setSelectedStudy(null); setGranularMode(false); } : undefined}
+          onClear={
+            selectedStudy
+              ? () => { setSelectedStudy(null); setGranularMode(false); }
+              : expandedClients.size > 0
+              ? () => setExpandedClients(new Set())
+              : undefined
+          }
         />
       </main>
     </div>
