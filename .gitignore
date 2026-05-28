@@ -1,8 +1,16 @@
+# R
 data/*.xlsx
 data/data_entry.db
 .Rhistory
 .Rdata
 *.Rproj.user
+
+# Next.js
+node_modules/
+.next/
+.env
+.env.local
+
+# Legacy web subdir (no longer used)
 web/node_modules/
 web/.next/
-web/.env
