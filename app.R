@@ -14,6 +14,8 @@ library(RSQLite)
 library(randomForest)
 library(stringr)
 library(tidyr)
+library(httr2)
+library(jsonlite)
 
 # ============================================================
 # HELPER FUNCTIONS
@@ -362,6 +364,78 @@ nlq_filter <- function(query, studies) {
 }
 
 # ============================================================
+# LLM BACKEND — Anthropic → Ollama → pattern-match fallback
+# Detected once at startup; used by nlq_explain()
+# ============================================================
+
+.llm_backend <- local({
+  if (nchar(Sys.getenv("ANTHROPIC_API_KEY")) > 0) {
+    message("[CMD Center] LLM: Anthropic Claude (haiku)")
+    "anthropic"
+  } else {
+    # probe Ollama
+    ok <- tryCatch({
+      resp <- request("http://localhost:11434/api/tags") |>
+        req_timeout(2) |> req_perform()
+      resp_status(resp) == 200
+    }, error = function(e) FALSE)
+    if (ok) { message("[CMD Center] LLM: Ollama (llama3)"); "ollama" }
+    else     { message("[CMD Center] LLM: pattern-match fallback"); "fallback" }
+  }
+})
+
+# Returns a human-readable summary string; never throws — always falls back.
+nlq_explain <- function(query, n_results, result_studies) {
+  if (.llm_backend == "fallback" || n_results == 0) return(NULL)
+
+  study_snippet <- if (n_results <= 6)
+    paste(result_studies, collapse = ", ")
+  else
+    paste(c(head(result_studies, 6), sprintf("…+%d more", n_results - 6)), collapse = ", ")
+
+  context <- sprintf(
+    "Portfolio has %d studies total. Query returned %d studies: %s.",
+    n_results, n_results, study_snippet
+  )
+  prompt <- sprintf(
+    paste0("You are a clinical trial portfolio assistant for Fortrea Biometrics.\n",
+           "Context: %s\nUser asked: \"%s\"\n",
+           "Reply in 1 concise sentence describing what was found. Be specific."),
+    context, query
+  )
+
+  tryCatch({
+    if (.llm_backend == "anthropic") {
+      resp <- request("https://api.anthropic.com/v1/messages") |>
+        req_headers(
+          "x-api-key"         = Sys.getenv("ANTHROPIC_API_KEY"),
+          "anthropic-version" = "2023-06-01",
+          "content-type"      = "application/json"
+        ) |>
+        req_body_json(list(
+          model      = "claude-haiku-4-5-20251001",
+          max_tokens = 150,
+          messages   = list(list(role = "user", content = prompt))
+        )) |>
+        req_timeout(8) |>
+        req_perform()
+      fromJSON(resp_body_string(resp))$content[[1]]$text
+
+    } else {  # ollama
+      resp <- request("http://localhost:11434/api/generate") |>
+        req_body_json(list(
+          model  = "llama3",
+          prompt = prompt,
+          stream = FALSE
+        )) |>
+        req_timeout(15) |>
+        req_perform()
+      fromJSON(resp_body_string(resp))$response
+    }
+  }, error = function(e) NULL)  # silent fallback on any network error
+}
+
+# ============================================================
 # SNAPSHOT DATA FOR COMPLETION OVER TIME CHART
 # ============================================================
 
@@ -697,17 +771,36 @@ server <- function(input, output, session) {
     sdata <- study_data_rv()
     res   <- nlq_filter(q, sdata)
     n     <- nrow(res)
+
+    backend_badge <- switch(.llm_backend,
+      anthropic = tags$span(style = "font-size:0.7em;color:#60a5fa;margin-left:8px;",
+                            "⚡ Claude"),
+      ollama    = tags$span(style = "font-size:0.7em;color:#a78bfa;margin-left:8px;",
+                            "🦙 Ollama"),
+      tags$span(style = "font-size:0.7em;color:#6b7280;margin-left:8px;",
+                "pattern match")
+    )
+
     if (n == 0) {
       div(class = "nlq-result-box",
-          tags$b(style = "color:#ffc107;", icon("search"), " No studies matched your query."))
+          tags$b(style = "color:#ffc107;", icon("search"), " No studies matched your query."),
+          backend_badge)
     } else {
+      # LLM explanation (NULL when fallback or error)
+      ai_text <- nlq_explain(q, n, res$study)
+
       study_list <- if (n <= 8) paste(res$study, collapse = ", ") else
         paste(c(head(res$study, 8), paste0("... +", n - 8, " more")), collapse = ", ")
+
       div(class = "nlq-result-box",
           tags$b(style = "color:#2ea55e;",
                  icon("check-circle"),
-                 sprintf(" %d %s matched: ", n, ifelse(n == 1, "study", "studies"))),
-          tags$span(style = "color:#aab;", study_list)
+                 sprintf(" %d %s matched", n, ifelse(n == 1, "study", "studies"))),
+          backend_badge,
+          if (!is.null(ai_text))
+            tags$p(style = "margin:6px 0 4px;color:#c9d1e0;font-style:italic;",
+                   icon("robot"), " ", ai_text),
+          tags$span(style = "color:#8892a4;font-size:0.85em;", study_list)
       )
     }
   })
