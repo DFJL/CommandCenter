@@ -1,3 +1,18 @@
+export type DeliverableBreakdown = {
+  total: number;
+  prod_done: number;
+  prod_pct: number;
+  prod_in_progress: number;
+  prod_not_started: number;
+  prod_on_hold: number;
+  qc_passed: number;
+  qc_pct: number;
+  qc_failed: number;
+  qc_in_progress: number;
+  qc_not_started: number;
+  qc_on_hold: number;
+};
+
 export type Study = {
   study: string;
   client: string;
@@ -19,6 +34,7 @@ export type Study = {
   risk_tier: 'Critical' | 'High' | 'Elevated' | 'Moderate' | 'Low';
   ai_risk_score: number;
   risk_factors: Array<{ label: string; value: number }>;
+  deliverable_breakdown: Partial<Record<'SDTMs' | 'ADaMs' | 'Tables' | 'Listings' | 'Figures', DeliverableBreakdown>>;
 };
 
 export type P21Finding = {
