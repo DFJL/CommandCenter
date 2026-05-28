@@ -873,140 +873,141 @@ export default function ResultsTab({ studies, savedUpdates = [] }: { studies: St
             </div>
           </div>
 
-          {/* Client groups */}
+          {/* Unified client + study table */}
           <div style={{ maxHeight: '560px', overflowY: 'auto' }}>
             {groupedByClient.length === 0 ? (
               <div className="px-4 py-8 text-center text-sm" style={{ color: '#8892a4' }}>No studies match the current filters.</div>
-            ) : groupedByClient.map(({ client, studies: clientStudies }) => {
-              const isExpanded = expandedClients.has(client);
-              const riskCounts = clientStudies.reduce((acc, s) => { acc[effectiveTier(s, savedUpdates)] = (acc[effectiveTier(s, savedUpdates)] || 0) + 1; return acc; }, {} as Record<string, number>);
-              const cAvgProd = clientStudies.reduce((a, s) => a + s.prod_pct, 0) / clientStudies.length;
-              const cAvgQc = clientStudies.reduce((a, s) => a + s.qc_pct, 0) / clientStudies.length;
-              const cTotalFail = clientStudies.reduce((a, s) => a + s.failed_qc, 0);
-              const cTotalDel = clientStudies.reduce((a, s) => a + s.total_del, 0);
-              const cFailPct = cTotalDel > 0 ? ((cTotalFail / cTotalDel) * 100).toFixed(1) : '0';
+            ) : (
+              <table className="w-full text-xs" style={{ minWidth: 900, borderCollapse: 'collapse' }}>
+                <thead style={{ position: 'sticky', top: 0, zIndex: 2, background: '#1c2230' }}>
+                  <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
+                    {['Study / Client', 'TA', 'Type', 'Risk', 'FPI', 'DBL', 'Wks to DBL', 'Prod %', 'QC %', 'QC Fail (n / %)', 'Sig. Delays'].map((h) => (
+                      <th key={h} className="text-left px-3 py-2 whitespace-nowrap" style={colStyle}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {groupedByClient.map(({ client, studies: clientStudies }) => {
+                    const isExpanded = expandedClients.has(client);
+                    const riskCounts = clientStudies.reduce((acc, s) => { acc[effectiveTier(s, savedUpdates)] = (acc[effectiveTier(s, savedUpdates)] || 0) + 1; return acc; }, {} as Record<string, number>);
+                    const cAvgProd = clientStudies.reduce((a, s) => a + s.prod_pct, 0) / clientStudies.length;
+                    const cAvgQc = clientStudies.reduce((a, s) => a + s.qc_pct, 0) / clientStudies.length;
+                    const cTotalFail = clientStudies.reduce((a, s) => a + s.failed_qc, 0);
+                    const cTotalDel = clientStudies.reduce((a, s) => a + s.total_del, 0);
+                    const cFailPct = cTotalDel > 0 ? ((cTotalFail / cTotalDel) * 100).toFixed(1) : '0';
+                    const cSigDelays = clientStudies.reduce((a, s) => a + s.sig_delays, 0);
 
-              return (
-                <div key={client}>
-                  {/* Green client header — EntityStudyPanel style */}
-                  <div
-                    className="flex items-center justify-between px-5 py-3 cursor-pointer"
-                    onClick={() => toggleClient(client)}
-                    style={{ background: '#1a5c38', borderBottom: '1px solid rgba(0,0,0,0.2)' }}
-                  >
-                    <div className="flex items-center gap-4">
-                      <div>
-                        <span className="text-xs font-medium uppercase tracking-wider text-white/50">Client view</span>
-                        <p className="text-sm font-bold text-white">{client}</p>
-                      </div>
-                      <div className="flex items-center gap-5 ml-2">
-                        <div className="text-center">
-                          <p className="text-lg font-bold text-white">{clientStudies.length}</p>
-                          <p className="text-xs text-white/60">Studies</p>
-                        </div>
-                        <div className="text-center">
-                          <p className="text-lg font-bold" style={{ color: '#86efac' }}>{cAvgProd.toFixed(1)}%</p>
-                          <p className="text-xs text-white/60">Avg Prod</p>
-                        </div>
-                        <div className="text-center">
-                          <p className="text-lg font-bold" style={{ color: '#93c5fd' }}>{cAvgQc.toFixed(1)}%</p>
-                          <p className="text-xs text-white/60">Avg QC</p>
-                        </div>
-                        <div className="text-center">
-                          <p className="text-lg font-bold" style={{ color: cTotalFail > 0 ? '#fca5a5' : '#86efac' }}>
-                            {cTotalFail} ({cFailPct}%)
-                          </p>
-                          <p className="text-xs text-white/60">QC Failures</p>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          {(['Critical', 'High', 'Elevated', 'Moderate', 'Low'] as const).filter((t) => riskCounts[t]).map((tier) => (
-                            <span key={tier} className={`inline-flex items-center gap-0.5 text-xs px-1.5 py-0.5 rounded-full font-medium ${RISK_STYLES[tier]}`}>
-                              {RISK_EMOJI[tier]} {riskCounts[tier]}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                    <span className="text-xs font-medium text-white/50">{isExpanded ? '▲ collapse' : '▼ expand'}</span>
-                  </div>
+                    return (
+                      <>
+                        {/* Client group header row */}
+                        <tr
+                          key={`client-${client}`}
+                          className="cursor-pointer"
+                          onClick={() => toggleClient(client)}
+                          style={{ background: 'rgba(26,92,56,0.18)', borderBottom: '1px solid rgba(26,92,56,0.4)' }}
+                        >
+                          <td className="px-3 py-2.5 font-semibold whitespace-nowrap" style={{ color: '#2ea55e', borderLeft: '3px solid #1a5c38' }}>
+                            <span className="mr-1.5 text-xs" style={{ color: '#2ea55e' }}>{isExpanded ? '▼' : '▶'}</span>
+                            {client}
+                            <span className="ml-2 text-xs font-normal" style={{ color: '#8892a4' }}>· {clientStudies.length} {clientStudies.length === 1 ? 'study' : 'studies'}</span>
+                          </td>
+                          <td className="px-3 py-2.5" style={{ color: '#6b7280' }}>—</td>
+                          <td className="px-3 py-2.5" style={{ color: '#6b7280' }}>—</td>
+                          <td className="px-3 py-2.5">
+                            <div className="flex items-center gap-1">
+                              {(['Critical', 'High', 'Elevated', 'Moderate', 'Low'] as const).filter((t) => riskCounts[t]).map((tier) => (
+                                <span key={tier} className={`inline-flex items-center gap-0.5 text-xs px-1.5 py-0.5 rounded-full font-medium ${RISK_STYLES[tier]}`}>
+                                  {RISK_EMOJI[tier]} {riskCounts[tier]}
+                                </span>
+                              ))}
+                            </div>
+                          </td>
+                          <td className="px-3 py-2.5" style={{ color: '#6b7280' }}>—</td>
+                          <td className="px-3 py-2.5" style={{ color: '#6b7280' }}>—</td>
+                          <td className="px-3 py-2.5" style={{ color: '#6b7280' }}>—</td>
+                          <td className="px-3 py-2.5">
+                            <div className="flex items-center gap-1.5">
+                              <div className="h-1.5 w-14 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.08)' }}><div className="h-full rounded-full" style={{ width: `${cAvgProd}%`, background: '#2ea55e' }} /></div>
+                              <span className="font-medium" style={{ color: cAvgProd >= 80 ? '#2ea55e' : cAvgProd >= 40 ? '#d97706' : '#e8eaf0' }}>{cAvgProd.toFixed(1)}%</span>
+                            </div>
+                          </td>
+                          <td className="px-3 py-2.5">
+                            <div className="flex items-center gap-1.5">
+                              <div className="h-1.5 w-14 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.08)' }}><div className="h-full rounded-full" style={{ width: `${cAvgQc}%`, background: '#3b82f6' }} /></div>
+                              <span className="font-medium" style={{ color: cAvgQc >= 80 ? '#2ea55e' : cAvgQc >= 40 ? '#d97706' : '#e8eaf0' }}>{cAvgQc.toFixed(1)}%</span>
+                            </div>
+                          </td>
+                          <td className="px-3 py-2.5 font-medium" style={{ color: cTotalFail > 0 ? '#ef4444' : '#2ea55e' }}>
+                            {cTotalFail > 0 ? `${cTotalFail} (${cFailPct}%)` : '0 ✓'}
+                          </td>
+                          <td className="px-3 py-2.5 font-medium" style={{ color: cSigDelays > 0 ? '#f97316' : '#6b7280' }}>{cSigDelays || '—'}</td>
+                        </tr>
 
-                  {/* Expanded study list */}
-                  {isExpanded && (
-                    <div>
-                      <table className="w-full text-xs" style={{ minWidth: 900 }}>
-                        <thead style={{ background: '#1c2230' }}>
-                          <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
-                            {['Study', 'TA', 'Type', 'Risk', 'FPI', 'DBL', 'Wks to DBL', 'Prod %', 'QC %', 'QC Fail (n / %)', 'Sig. Delays'].map((h) => (
-                              <th key={h} className="text-left px-3 py-2 whitespace-nowrap" style={colStyle}>{h}</th>
-                            ))}
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {clientStudies.map((study) => {
-                            const eTier = effectiveTier(study, savedUpdates);
-                            const bump = savedUpdates.find((u) => u.study === study.study)?.riskBump ?? 0;
-                            const ms = nextUpcomingMilestone(study, savedUpdates);
-                            const sFail = study.total_del > 0 ? ((study.failed_qc / study.total_del) * 100).toFixed(0) : '0';
-                            const wkColor = study.weeks_to_dbl !== null && study.weeks_to_dbl <= 4 ? '#ef4444' : study.weeks_to_dbl !== null && study.weeks_to_dbl <= 8 ? '#f97316' : '#8892a4';
-                            const isSelected = selectedStudy === study.study;
-                            return (
-                              <>
-                                <tr
-                                  key={study.study}
-                                  className="hover:bg-white/[0.03] transition-colors cursor-pointer"
-                                  style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', background: isSelected ? 'rgba(59,130,246,0.08)' : undefined }}
-                                  onClick={() => { setSelectedStudy(isSelected ? null : study.study); if (isSelected) setGranularMode(false); }}
-                                >
-                                  <td className="px-3 py-2 font-medium whitespace-nowrap" style={{ color: isSelected ? '#93c5fd' : '#e8eaf0' }}>
-                                    <span className="mr-1" style={{ color: '#8892a4' }}>{isSelected ? '▼' : '▶'}</span>
-                                    {study.study}
-                                    {ms && <span className="ml-2 text-xs" style={{ color: '#8892a4' }}>📅 {ms.date}</span>}
-                                    {bump > 0 && <span className="ml-2 text-xs font-semibold" style={{ color: '#ef4444' }}>+{(bump * 100).toFixed(0)}%</span>}
+                        {/* Study rows (when expanded) */}
+                        {isExpanded && clientStudies.map((study) => {
+                          const eTier = effectiveTier(study, savedUpdates);
+                          const bump = savedUpdates.find((u) => u.study === study.study)?.riskBump ?? 0;
+                          const ms = nextUpcomingMilestone(study, savedUpdates);
+                          const sFail = study.total_del > 0 ? ((study.failed_qc / study.total_del) * 100).toFixed(0) : '0';
+                          const wkColor = study.weeks_to_dbl !== null && study.weeks_to_dbl <= 4 ? '#ef4444' : study.weeks_to_dbl !== null && study.weeks_to_dbl <= 8 ? '#f97316' : '#8892a4';
+                          const isSelected = selectedStudy === study.study;
+                          return (
+                            <>
+                              <tr
+                                key={study.study}
+                                className="hover:bg-white/[0.03] transition-colors cursor-pointer"
+                                style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', background: isSelected ? 'rgba(59,130,246,0.08)' : undefined }}
+                                onClick={() => { setSelectedStudy(isSelected ? null : study.study); if (isSelected) setGranularMode(false); }}
+                              >
+                                <td className="px-3 py-2 font-medium whitespace-nowrap" style={{ color: isSelected ? '#93c5fd' : '#e8eaf0', borderLeft: '3px solid transparent', paddingLeft: '2rem' }}>
+                                  <span className="mr-1" style={{ color: '#8892a4' }}>{isSelected ? '▼' : '▶'}</span>
+                                  {study.study}
+                                  {ms && <span className="ml-2 text-xs" style={{ color: '#8892a4' }}>📅 {ms.date}</span>}
+                                  {bump > 0 && <span className="ml-2 text-xs font-semibold" style={{ color: '#ef4444' }}>+{(bump * 100).toFixed(0)}%</span>}
+                                </td>
+                                <td className="px-3 py-2 whitespace-nowrap" style={{ color: '#8892a4' }}>{study.ta}</td>
+                                <td className="px-3 py-2">
+                                  <span className="px-1.5 py-0.5 rounded text-xs" style={{ background: study.fso_fsp === 'FSO' ? 'rgba(46,165,94,0.1)' : 'rgba(59,130,246,0.1)', color: study.fso_fsp === 'FSO' ? '#2ea55e' : '#3b82f6' }}>{study.fso_fsp}</span>
+                                </td>
+                                <td className="px-3 py-2">
+                                  <span className={`inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded-full ${RISK_STYLES[eTier]}`}>{RISK_EMOJI[eTier]} {eTier}</span>
+                                </td>
+                                <td className="px-3 py-2 whitespace-nowrap" style={{ color: '#8892a4' }}>{study.fpi ?? '—'}</td>
+                                <td className="px-3 py-2 whitespace-nowrap" style={{ color: '#8892a4' }}>{study.dbl ?? '—'}</td>
+                                <td className="px-3 py-2 font-medium whitespace-nowrap" style={{ color: wkColor }}>{study.weeks_to_dbl !== null ? study.weeks_to_dbl.toFixed(1) : '—'}</td>
+                                <td className="px-3 py-2">
+                                  <div className="flex items-center gap-1.5">
+                                    <div className="h-1.5 w-14 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.08)' }}><div className="h-full rounded-full" style={{ width: `${study.prod_pct}%`, background: '#2ea55e' }} /></div>
+                                    <span style={{ color: study.prod_pct >= 80 ? '#2ea55e' : study.prod_pct >= 40 ? '#d97706' : '#e8eaf0' }}>{study.prod_pct.toFixed(0)}%</span>
+                                  </div>
+                                </td>
+                                <td className="px-3 py-2">
+                                  <div className="flex items-center gap-1.5">
+                                    <div className="h-1.5 w-14 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.08)' }}><div className="h-full rounded-full" style={{ width: `${study.qc_pct}%`, background: '#3b82f6' }} /></div>
+                                    <span style={{ color: study.qc_pct >= 80 ? '#2ea55e' : study.qc_pct >= 40 ? '#d97706' : '#e8eaf0' }}>{study.qc_pct.toFixed(0)}%</span>
+                                  </div>
+                                </td>
+                                <td className="px-3 py-2 font-medium" style={{ color: study.failed_qc > 0 ? '#ef4444' : '#2ea55e' }}>
+                                  {study.failed_qc > 0 ? `${study.failed_qc} (${sFail}%)` : '0 ✓'}
+                                </td>
+                                <td className="px-3 py-2" style={{ color: study.sig_delays > 0 ? '#f97316' : '#8892a4' }}>{study.sig_delays}</td>
+                              </tr>
+                              {isSelected && (
+                                <tr key={`${study.study}-drilldown`}>
+                                  <td colSpan={11} style={{ padding: 0 }}>
+                                    <DrillDown study={study} onClose={() => { setSelectedStudy(null); setGranularMode(false); }} effectiveTier={eTier} riskBump={bump} />
                                   </td>
-                                  <td className="px-3 py-2 whitespace-nowrap" style={{ color: '#8892a4' }}>{study.ta}</td>
-                                  <td className="px-3 py-2">
-                                    <span className="px-1.5 py-0.5 rounded text-xs" style={{ background: study.fso_fsp === 'FSO' ? 'rgba(46,165,94,0.1)' : 'rgba(59,130,246,0.1)', color: study.fso_fsp === 'FSO' ? '#2ea55e' : '#3b82f6' }}>{study.fso_fsp}</span>
-                                  </td>
-                                  <td className="px-3 py-2">
-                                    <span className={`inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded-full ${RISK_STYLES[eTier]}`}>{RISK_EMOJI[eTier]} {eTier}</span>
-                                  </td>
-                                  <td className="px-3 py-2 whitespace-nowrap" style={{ color: '#8892a4' }}>{study.fpi ?? '—'}</td>
-                                  <td className="px-3 py-2 whitespace-nowrap" style={{ color: '#8892a4' }}>{study.dbl ?? '—'}</td>
-                                  <td className="px-3 py-2 font-medium whitespace-nowrap" style={{ color: wkColor }}>{study.weeks_to_dbl !== null ? study.weeks_to_dbl.toFixed(1) : '—'}</td>
-                                  <td className="px-3 py-2">
-                                    <div className="flex items-center gap-1.5">
-                                      <div className="h-1.5 w-14 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.08)' }}><div className="h-full rounded-full" style={{ width: `${study.prod_pct}%`, background: '#2ea55e' }} /></div>
-                                      <span style={{ color: study.prod_pct >= 80 ? '#2ea55e' : study.prod_pct >= 40 ? '#d97706' : '#e8eaf0' }}>{study.prod_pct.toFixed(0)}%</span>
-                                    </div>
-                                  </td>
-                                  <td className="px-3 py-2">
-                                    <div className="flex items-center gap-1.5">
-                                      <div className="h-1.5 w-14 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.08)' }}><div className="h-full rounded-full" style={{ width: `${study.qc_pct}%`, background: '#3b82f6' }} /></div>
-                                      <span style={{ color: study.qc_pct >= 80 ? '#2ea55e' : study.qc_pct >= 40 ? '#d97706' : '#e8eaf0' }}>{study.qc_pct.toFixed(0)}%</span>
-                                    </div>
-                                  </td>
-                                  <td className="px-3 py-2 font-medium" style={{ color: study.failed_qc > 0 ? '#ef4444' : '#2ea55e' }}>
-                                    {study.failed_qc > 0 ? `${study.failed_qc} (${sFail}%)` : '0 ✓'}
-                                  </td>
-                                  <td className="px-3 py-2" style={{ color: study.sig_delays > 0 ? '#f97316' : '#8892a4' }}>{study.sig_delays}</td>
                                 </tr>
-                                {isSelected && (
-                                  <tr key={`${study.study}-drilldown`}>
-                                    <td colSpan={11} style={{ padding: 0 }}>
-                                      <DrillDown study={study} onClose={() => { setSelectedStudy(null); setGranularMode(false); }} effectiveTier={eTier} riskBump={bump} />
-                                    </td>
-                                  </tr>
-                                )}
-                              </>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
+                              )}
+                            </>
+                          );
+                        })}
+                      </>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
           </div>
         </div>
 
