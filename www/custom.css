@@ -1,0 +1,376 @@
+/* Clinical Delivery Command Center — Custom Styles */
+
+/* ── Root / Theme ──────────────────────────────────────────────────────────── */
+:root {
+  --fortrea-green-dark:  #1a5c38;
+  --fortrea-green:       #2ea55e;
+  --fortrea-green-light: #4ade80;
+  --bg-primary:   #0d1117;
+  --bg-card:      #161b24;
+  --bg-surface:   #1c2230;
+  --bg-surface2:  #222a3a;
+  --border-color: rgba(255,255,255,0.07);
+  --text-primary: #e8eaf0;
+  --text-secondary: #8892a4;
+  --text-muted:   #4e5870;
+  --risk-critical: #dc2626;
+  --risk-high:     #ef4444;
+  --risk-elevated: #f97316;
+  --risk-moderate: #eab308;
+  --risk-low:      #22c55e;
+  --ai-blue:       #3b82f6;
+}
+
+body {
+  background-color: var(--bg-primary) !important;
+  color: var(--text-primary) !important;
+}
+
+/* ── Navbar ──────────────────────────────────────────────────────────────────── */
+.navbar {
+  background-color: var(--fortrea-green-dark) !important;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+}
+
+.navbar-brand {
+  font-weight: 700 !important;
+  font-size: 1.1rem !important;
+  color: #fff !important;
+  letter-spacing: 0.3px;
+}
+
+.navbar .nav-link {
+  color: rgba(255,255,255,0.85) !important;
+  font-weight: 500;
+  padding: 0.5rem 1rem;
+  transition: color 0.2s;
+}
+
+.navbar .nav-link:hover,
+.navbar .nav-link.active {
+  color: #fff !important;
+  background-color: rgba(255,255,255,0.12) !important;
+  border-radius: 6px;
+}
+
+/* ── Cards ───────────────────────────────────────────────────────────────────── */
+.card {
+  background-color: var(--bg-card) !important;
+  border: 1px solid var(--border-color) !important;
+  border-radius: 10px !important;
+  box-shadow: 0 1px 6px rgba(0,0,0,0.3) !important;
+}
+
+.card-header {
+  background-color: var(--bg-surface) !important;
+  border-bottom: 1px solid var(--border-color) !important;
+  font-weight: 600 !important;
+  color: var(--text-primary) !important;
+  font-size: 0.9rem;
+  letter-spacing: 0.2px;
+}
+
+.card-header.bg-success {
+  background-color: var(--fortrea-green-dark) !important;
+  color: #fff !important;
+}
+
+/* ── Value Boxes ─────────────────────────────────────────────────────────────── */
+.bslib-value-box {
+  background-color: var(--bg-card) !important;
+  border: 1px solid var(--border-color) !important;
+}
+
+.value-box-value {
+  font-size: 2rem !important;
+  font-weight: 700 !important;
+}
+
+/* ── Sidebar ─────────────────────────────────────────────────────────────────── */
+.bslib-sidebar-layout > .sidebar {
+  background-color: var(--bg-surface) !important;
+  border-right: 1px solid var(--border-color) !important;
+}
+
+/* ── Inputs ──────────────────────────────────────────────────────────────────── */
+.form-control, .form-select, .selectize-input {
+  background-color: var(--bg-surface2) !important;
+  border-color: var(--border-color) !important;
+  color: var(--text-primary) !important;
+}
+
+.form-control:focus, .form-select:focus {
+  background-color: var(--bg-surface2) !important;
+  border-color: var(--fortrea-green) !important;
+  box-shadow: 0 0 0 2px rgba(46,165,94,0.25) !important;
+  color: var(--text-primary) !important;
+}
+
+.form-label, label {
+  color: var(--text-secondary) !important;
+  font-size: 0.82rem;
+  font-weight: 500;
+  margin-bottom: 4px;
+}
+
+.form-check-input:checked {
+  background-color: var(--fortrea-green) !important;
+  border-color: var(--fortrea-green) !important;
+}
+
+/* ── Buttons ─────────────────────────────────────────────────────────────────── */
+.btn-success {
+  background-color: var(--fortrea-green) !important;
+  border-color: var(--fortrea-green) !important;
+  color: #fff !important;
+}
+
+.btn-success:hover {
+  background-color: var(--fortrea-green-dark) !important;
+}
+
+/* ── NL Query chips ──────────────────────────────────────────────────────────── */
+.nlq-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.nlq-chips .btn {
+  background-color: var(--bg-surface2) !important;
+  border: 1px solid var(--border-color) !important;
+  color: var(--text-secondary) !important;
+  font-size: 0.78rem;
+  padding: 3px 10px;
+  border-radius: 20px;
+  transition: all 0.2s;
+}
+
+.nlq-chips .btn:hover {
+  border-color: var(--fortrea-green) !important;
+  color: var(--fortrea-green) !important;
+}
+
+.nlq-result-box {
+  background-color: var(--bg-surface);
+  border-left: 3px solid var(--fortrea-green);
+  border-radius: 0 6px 6px 0;
+  padding: 8px 12px;
+  margin-top: 10px;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+/* ── Risk Badges ─────────────────────────────────────────────────────────────── */
+.risk-badge {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.risk-critical { background-color: rgba(220,38,38,0.15); color: #f87171; border: 1px solid rgba(220,38,38,0.3); }
+.risk-high      { background-color: rgba(239,68,68,0.15);  color: #fca5a5; border: 1px solid rgba(239,68,68,0.3); }
+.risk-elevated  { background-color: rgba(249,115,22,0.15); color: #fb923c; border: 1px solid rgba(249,115,22,0.3); }
+.risk-moderate  { background-color: rgba(234,179,8,0.15);  color: #fbbf24; border: 1px solid rgba(234,179,8,0.3); }
+.risk-low       { background-color: rgba(34,197,94,0.15);  color: #4ade80; border: 1px solid rgba(34,197,94,0.3); }
+
+/* ── Severity Badges (P21) ───────────────────────────────────────────────────── */
+.sev-error   { background-color: rgba(220,38,38,0.15); color: #f87171; border: 1px solid rgba(220,38,38,0.3); padding: 2px 8px; border-radius: 10px; font-size: 0.75rem; font-weight: 600; }
+.sev-warning { background-color: rgba(249,115,22,0.15); color: #fb923c; border: 1px solid rgba(249,115,22,0.3); padding: 2px 8px; border-radius: 10px; font-size: 0.75rem; font-weight: 600; }
+
+/* ── DT Tables ───────────────────────────────────────────────────────────────── */
+.dataTables_wrapper,
+table.dataTable,
+.dataTables_scrollBody {
+  background-color: var(--bg-card) !important;
+  color: var(--text-primary) !important;
+}
+
+table.dataTable thead th {
+  background-color: var(--bg-surface) !important;
+  color: var(--text-secondary) !important;
+  border-bottom: 1px solid var(--border-color) !important;
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+table.dataTable tbody tr {
+  background-color: var(--bg-card) !important;
+  border-bottom: 1px solid var(--border-color) !important;
+}
+
+table.dataTable tbody tr:hover {
+  background-color: var(--bg-surface) !important;
+  cursor: pointer;
+}
+
+table.dataTable.row-selected tbody tr.selected,
+table.dataTable tbody tr.selected {
+  background-color: rgba(46,165,94,0.12) !important;
+  border-left: 2px solid var(--fortrea-green) !important;
+}
+
+.dataTables_info, .dataTables_length, .dataTables_filter,
+.dataTables_paginate {
+  color: var(--text-secondary) !important;
+  font-size: 0.82rem;
+}
+
+.dataTables_filter input {
+  background-color: var(--bg-surface2) !important;
+  border: 1px solid var(--border-color) !important;
+  color: var(--text-primary) !important;
+  border-radius: 6px;
+  padding: 3px 8px;
+}
+
+.paginate_button {
+  color: var(--text-secondary) !important;
+}
+
+.paginate_button.current,
+.paginate_button.current:hover {
+  background: var(--fortrea-green) !important;
+  border-color: var(--fortrea-green) !important;
+  color: #fff !important;
+}
+
+/* ── Drill-down ──────────────────────────────────────────────────────────────── */
+.drilldown-card {
+  border: 1px solid var(--fortrea-green-dark) !important;
+  box-shadow: 0 0 12px rgba(46,165,94,0.12) !important;
+}
+
+/* ── Progress Bars ───────────────────────────────────────────────────────────── */
+.metric-bar-wrap {
+  margin: 8px 0;
+}
+
+.metric-label {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+}
+
+.metric-bar {
+  height: 8px;
+  background-color: var(--bg-surface2);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.metric-bar-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.6s ease;
+}
+
+.bar-prod  { background-color: var(--fortrea-green); }
+.bar-qc    { background-color: #3b82f6; }
+.bar-risk  { background-color: var(--risk-elevated); }
+
+/* ── AI Risk Panel ───────────────────────────────────────────────────────────── */
+.ai-card {
+  border: 1px solid rgba(59,130,246,0.25) !important;
+}
+
+.ai-card .card-header {
+  background-color: rgba(59,130,246,0.1) !important;
+  color: #93c5fd !important;
+}
+
+.ai-factor-bar {
+  margin: 6px 0;
+}
+
+.ai-factor-label {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  margin-bottom: 3px;
+}
+
+.ai-factor-track {
+  height: 6px;
+  background-color: var(--bg-surface2);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.ai-factor-fill {
+  height: 100%;
+  background-color: #3b82f6;
+  border-radius: 3px;
+}
+
+/* ── Selectize Dropdown ──────────────────────────────────────────────────────── */
+.selectize-dropdown {
+  background-color: var(--bg-surface2) !important;
+  border-color: var(--border-color) !important;
+  color: var(--text-primary) !important;
+}
+
+.selectize-dropdown .option:hover,
+.selectize-dropdown .option.active {
+  background-color: rgba(46,165,94,0.15) !important;
+  color: var(--text-primary) !important;
+}
+
+/* ── Radio Buttons ───────────────────────────────────────────────────────────── */
+.shiny-input-radiogroup .radio label {
+  color: var(--text-secondary) !important;
+}
+
+/* ── hr divider ──────────────────────────────────────────────────────────────── */
+hr {
+  border-color: var(--border-color) !important;
+  opacity: 0.5;
+}
+
+/* ── Section headings ────────────────────────────────────────────────────────── */
+h5 {
+  color: var(--fortrea-green) !important;
+  font-size: 0.85rem !important;
+  font-weight: 600 !important;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin: 12px 0 8px;
+}
+
+/* ── Notification ────────────────────────────────────────────────────────────── */
+.shiny-notification {
+  background-color: var(--fortrea-green-dark) !important;
+  color: #fff !important;
+  border: none !important;
+}
+
+/* ── Footer tag ──────────────────────────────────────────────────────────────── */
+.app-footer {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  text-align: center;
+  padding: 8px;
+}
+
+/* ── KPI value color overrides ───────────────────────────────────────────────── */
+.kpi-danger .value-box-value  { color: #f87171 !important; }
+.kpi-warning .value-box-value { color: #fb923c !important; }
+.kpi-success .value-box-value { color: var(--fortrea-green-light) !important; }
+
+/* ── Plotly chart bg fix ──────────────────────────────────────────────────────── */
+.js-plotly-plot .plotly .bg {
+  fill: transparent !important;
+}
+
+/* ── Scroll fix ──────────────────────────────────────────────────────────────── */
+.tab-content {
+  padding: 16px;
+}

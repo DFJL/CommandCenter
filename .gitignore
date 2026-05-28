@@ -1,0 +1,5 @@
+data/*.xlsx
+data/data_entry.db
+.Rhistory
+.Rdata
+*.Rproj.user
