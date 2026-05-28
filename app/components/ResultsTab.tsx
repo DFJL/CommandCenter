@@ -888,38 +888,46 @@ export default function ResultsTab({ studies, savedUpdates = [] }: { studies: St
 
               return (
                 <div key={client}>
-                  {/* Green client header row */}
+                  {/* Green client header — EntityStudyPanel style */}
                   <div
-                    className="flex items-center gap-3 px-4 py-2.5 cursor-pointer"
+                    className="flex items-center justify-between px-5 py-3 cursor-pointer"
                     onClick={() => toggleClient(client)}
-                    style={{
-                      background: isExpanded ? '#1a5c38' : 'rgba(26,92,56,0.18)',
-                      borderBottom: '1px solid rgba(255,255,255,0.06)',
-                    }}
+                    style={{ background: '#1a5c38', borderBottom: '1px solid rgba(0,0,0,0.2)' }}
                   >
-                    <span className="text-xs font-bold" style={{ color: isExpanded ? '#86efac' : '#2ea55e' }}>{isExpanded ? '▼' : '▶'}</span>
-                    <span className="text-sm font-bold flex-1 min-w-0 truncate" style={{ color: isExpanded ? '#fff' : '#e8eaf0' }}>{client}</span>
-                    <span className="text-xs flex-shrink-0" style={{ color: isExpanded ? 'rgba(255,255,255,0.5)' : '#8892a4' }}>
-                      {clientStudies.length} {clientStudies.length === 1 ? 'study' : 'studies'}
-                    </span>
-                    <span className="text-xs font-semibold flex-shrink-0" style={{ color: isExpanded ? '#86efac' : '#2ea55e' }}>
-                      Prod {cAvgProd.toFixed(1)}%
-                    </span>
-                    <span className="text-xs font-semibold flex-shrink-0" style={{ color: isExpanded ? '#93c5fd' : '#3b82f6' }}>
-                      QC {cAvgQc.toFixed(1)}%
-                    </span>
-                    {cTotalFail > 0 && (
-                      <span className="text-xs font-semibold flex-shrink-0" style={{ color: '#fca5a5' }}>
-                        {cTotalFail} fail ({cFailPct}%)
-                      </span>
-                    )}
-                    <div className="flex items-center gap-1 flex-shrink-0">
-                      {(['Critical', 'High', 'Elevated', 'Moderate', 'Low'] as const).filter((t) => riskCounts[t]).map((tier) => (
-                        <span key={tier} className={`inline-flex items-center gap-0.5 text-xs px-1.5 py-0.5 rounded-full font-medium ${RISK_STYLES[tier]}`}>
-                          {RISK_EMOJI[tier]} {riskCounts[tier]}
-                        </span>
-                      ))}
+                    <div className="flex items-center gap-4">
+                      <div>
+                        <span className="text-xs font-medium uppercase tracking-wider text-white/50">Client view</span>
+                        <p className="text-sm font-bold text-white">{client}</p>
+                      </div>
+                      <div className="flex items-center gap-5 ml-2">
+                        <div className="text-center">
+                          <p className="text-lg font-bold text-white">{clientStudies.length}</p>
+                          <p className="text-xs text-white/60">Studies</p>
+                        </div>
+                        <div className="text-center">
+                          <p className="text-lg font-bold" style={{ color: '#86efac' }}>{cAvgProd.toFixed(1)}%</p>
+                          <p className="text-xs text-white/60">Avg Prod</p>
+                        </div>
+                        <div className="text-center">
+                          <p className="text-lg font-bold" style={{ color: '#93c5fd' }}>{cAvgQc.toFixed(1)}%</p>
+                          <p className="text-xs text-white/60">Avg QC</p>
+                        </div>
+                        <div className="text-center">
+                          <p className="text-lg font-bold" style={{ color: cTotalFail > 0 ? '#fca5a5' : '#86efac' }}>
+                            {cTotalFail} ({cFailPct}%)
+                          </p>
+                          <p className="text-xs text-white/60">QC Failures</p>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          {(['Critical', 'High', 'Elevated', 'Moderate', 'Low'] as const).filter((t) => riskCounts[t]).map((tier) => (
+                            <span key={tier} className={`inline-flex items-center gap-0.5 text-xs px-1.5 py-0.5 rounded-full font-medium ${RISK_STYLES[tier]}`}>
+                              {RISK_EMOJI[tier]} {riskCounts[tier]}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
                     </div>
+                    <span className="text-xs font-medium text-white/50">{isExpanded ? '▲ collapse' : '▼ expand'}</span>
                   </div>
 
                   {/* Expanded study list */}
