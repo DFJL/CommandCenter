@@ -686,14 +686,28 @@ export default function ResultsTab({ studies, savedUpdates = [] }: { studies: St
   const avgProd = sidebarFiltered.length > 0 ? sidebarFiltered.reduce((a, s) => a + s.prod_pct, 0) / sidebarFiltered.length : 0;
   const avgQc = sidebarFiltered.length > 0 ? sidebarFiltered.reduce((a, s) => a + s.qc_pct, 0) / sidebarFiltered.length : 0;
 
-  // Chart uses fully-filtered set so it responds to NLQ, risk, client, search, FSO/FSP
-  const chartAvgProd = tableFiltered.length > 0 ? tableFiltered.reduce((a, s) => a + s.prod_pct, 0) / tableFiltered.length : 0;
-  const chartAvgQc = tableFiltered.length > 0 ? tableFiltered.reduce((a, s) => a + s.qc_pct, 0) / tableFiltered.length : 0;
+  // Chart scopes to selected study > expanded client(s) > all filtered studies
+  const chartStudies = useMemo(() => {
+    if (selectedStudy) return tableFiltered.filter((s) => s.study === selectedStudy);
+    if (expandedClients.size > 0) return tableFiltered.filter((s) => expandedClients.has(s.client));
+    return tableFiltered;
+  }, [tableFiltered, selectedStudy, expandedClients]);
+
+  const chartLabel = selectedStudy
+    ? selectedStudy
+    : expandedClients.size === 1
+    ? [...expandedClients][0]
+    : expandedClients.size > 1
+    ? `${expandedClients.size} clients`
+    : null;
+
+  const chartAvgProd = chartStudies.length > 0 ? chartStudies.reduce((a, s) => a + s.prod_pct, 0) / chartStudies.length : 0;
+  const chartAvgQc = chartStudies.length > 0 ? chartStudies.reduce((a, s) => a + s.qc_pct, 0) / chartStudies.length : 0;
 
   const trendData = useMemo(() => {
     const baseProd = BASE_TREND_DATA[BASE_TREND_DATA.length - 1].prod_pct;
     const baseQc = BASE_TREND_DATA[BASE_TREND_DATA.length - 1].qc_pct;
-    if (baseProd === 0 || baseQc === 0 || tableFiltered.length === 0) return BASE_TREND_DATA;
+    if (baseProd === 0 || baseQc === 0 || chartStudies.length === 0) return BASE_TREND_DATA;
     const prodScale = chartAvgProd / baseProd;
     const qcScale = chartAvgQc / baseQc;
     return BASE_TREND_DATA.map((d, i) =>
@@ -701,7 +715,7 @@ export default function ResultsTab({ studies, savedUpdates = [] }: { studies: St
         ? { ...d, prod_pct: +chartAvgProd.toFixed(1), qc_pct: +chartAvgQc.toFixed(1) }
         : { ...d, prod_pct: +(d.prod_pct * prodScale).toFixed(1), qc_pct: +(d.qc_pct * qcScale).toFixed(1) }
     );
-  }, [chartAvgProd, chartAvgQc, tableFiltered.length]);
+  }, [chartAvgProd, chartAvgQc, chartStudies.length]);
 
   const trendDeltaProd = +(trendData[trendData.length - 1].prod_pct - trendData[trendData.length - 2].prod_pct).toFixed(1);
   const trendDeltaQc = +(trendData[trendData.length - 1].qc_pct - trendData[trendData.length - 2].qc_pct).toFixed(1);
@@ -738,7 +752,10 @@ export default function ResultsTab({ studies, savedUpdates = [] }: { studies: St
     setNlqActive(true);
     setNlqQuery(query);
     try {
-      const context = `Total studies: ${studies.length}, Delayed: ${delayed}, At-risk: ${atRisk}, Avg prod: ${avgProd.toFixed(1)}%, Avg QC: ${avgQc.toFixed(1)}%, Clients: ${clients.slice(1).join(', ')}`;
+      const studyLines = sidebarFiltered.slice(0, 80).map((s) =>
+        `- ${s.study}: client=${s.client}, TA=${s.ta}, type=${s.fso_fsp}, risk=${effectiveTier(s, savedUpdates)}, prod=${s.prod_pct}%, qc=${s.qc_pct}%, delayed=${s.delayed}, sig_delays=${s.sig_delays}, weeks_to_dbl=${s.weeks_to_dbl ?? 'N/A'}`
+      ).join('\n');
+      const context = `Portfolio: ${sidebarFiltered.length} studies across ${new Set(sidebarFiltered.map((s) => s.client)).size} clients. Delayed: ${delayed}, At-risk: ${atRisk}, Avg prod: ${avgProd.toFixed(1)}%, Avg QC: ${avgQc.toFixed(1)}%.\n\nStudies:\n${studyLines}`;
       const res = await fetch('/api/nlq', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -896,12 +913,20 @@ export default function ResultsTab({ studies, savedUpdates = [] }: { studies: St
         {/* Completion Over Time — responds to filters */}
         <div className="rounded-lg p-4" style={{ background: '#161b24', border: '1px solid rgba(255,255,255,0.07)' }}>
           <div className="flex items-center justify-between mb-3">
-            <p className="text-sm font-semibold" style={{ color: '#e8eaf0' }}>
-              Delivery Trend
-              {(fsoFspFilter !== 'All' || nlqActive || riskFilter !== 'All' || !!tableSearch || clientTableFilter !== 'All') && (
-                <span className="ml-2 text-xs font-normal" style={{ color: '#3b82f6' }}>· filtered</span>
-              )}
-            </p>
+            <div>
+              <p className="text-sm font-semibold" style={{ color: '#e8eaf0' }}>
+                Delivery Trend
+                {chartLabel && (
+                  <span className="ml-2 text-xs font-normal" style={{ color: '#2ea55e' }}>— {chartLabel}</span>
+                )}
+                {(fsoFspFilter !== 'All' || nlqActive || riskFilter !== 'All' || !!tableSearch || clientTableFilter !== 'All') && (
+                  <span className="ml-2 text-xs font-normal" style={{ color: '#3b82f6' }}>· filtered</span>
+                )}
+              </p>
+              <p className="text-xs" style={{ color: '#8892a4' }}>
+                {chartStudies.length} {chartStudies.length === 1 ? 'study' : 'studies'} · Prod {chartAvgProd.toFixed(1)}% · QC {chartAvgQc.toFixed(1)}%
+              </p>
+            </div>
             <span className="text-xs" style={{ color: '#8892a4' }}>{SNAPSHOT_DATES.length} Snapshot dates ▼</span>
           </div>
           <ResponsiveContainer width="100%" height={190}>
