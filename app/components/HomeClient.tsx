@@ -3,10 +3,11 @@
 import { useState, useEffect } from 'react';
 import type { Study, P21Finding, StudyUpdate } from '../types';
 import ResultsTab from './ResultsTab';
-import InconsistenciesTab from './InconsistenciesTab';
+import DataQualityTab from './DataQualityTab';
+import ProgrammingIssuesTab from './ProgrammingIssuesTab';
 import StudyUpdatesTab from './StudyUpdatesTab';
 
-type Tab = 'results' | 'inconsistencies' | 'updates';
+type Tab = 'results' | 'dq' | 'issues' | 'updates';
 
 interface Props {
   studies: Study[];
@@ -34,7 +35,8 @@ export default function HomeClient({ studies, findings }: Props) {
 
   const tabs: { id: Tab; label: string }[] = [
     { id: 'results', label: 'Portfolio' },
-    { id: 'inconsistencies', label: 'Data Quality' },
+    { id: 'dq',      label: 'Data Quality' },
+    { id: 'issues',  label: 'QC Findings' },
     { id: 'updates', label: 'Study Log' },
   ];
 
@@ -63,9 +65,10 @@ export default function HomeClient({ studies, findings }: Props) {
 
       {/* Tab content */}
       <div>
-        {activeTab === 'results' && <ResultsTab studies={studies} savedUpdates={updates} />}
-        {activeTab === 'inconsistencies' && <InconsistenciesTab findings={findings} />}
-        {activeTab === 'updates' && (
+        {activeTab === 'results'  && <ResultsTab studies={studies} savedUpdates={updates} />}
+        {activeTab === 'dq'       && <DataQualityTab />}
+        {activeTab === 'issues'   && <ProgrammingIssuesTab findings={findings} />}
+        {activeTab === 'updates'  && (
           <StudyUpdatesTab studies={studies} onSave={handleSaveUpdate} savedUpdates={updates} />
         )}
       </div>
