@@ -420,6 +420,60 @@ const STATUS_COLORS: Record<string, string> = {
   'Passed QC': '#2ea55e', 'Failed QC': '#ef4444',
 };
 
+function InlineChart({ title, metric, metricLabel, data }: { title: string; metric: string; metricLabel: string; data: { name: string; value: number }[] }) {
+  const color = metric === 'prod_pct' ? '#2ea55e' : metric === 'qc_pct' ? '#3b82f6' : metric === 'failed_qc' ? '#ef4444' : '#f97316';
+  const isPct = metric.endsWith('_pct');
+  return (
+    <div className="mt-2 rounded overflow-hidden" style={{ background: '#1c2230', border: '1px solid rgba(255,255,255,0.07)' }}>
+      <div className="px-3 py-1.5 text-xs font-medium" style={{ background: 'rgba(26,92,56,0.25)', color: '#2ea55e' }}>{title}</div>
+      <div style={{ padding: '8px 4px 4px' }}>
+        <ResponsiveContainer width="100%" height={data.length * 26 + 24}>
+          <BarChart data={data} layout="vertical" margin={{ top: 0, right: 36, left: 4, bottom: 0 }}>
+            <XAxis type="number" tick={{ fill: '#8892a4', fontSize: 9 }} axisLine={false} tickLine={false} tickFormatter={isPct ? (v) => `${v}%` : undefined} />
+            <YAxis type="category" dataKey="name" tick={{ fill: '#e8eaf0', fontSize: 10 }} width={90} axisLine={false} tickLine={false} />
+            <Tooltip contentStyle={{ background: '#1c2230', border: '1px solid rgba(255,255,255,0.1)', fontSize: 11 }} formatter={(v) => [`${v}${isPct ? '%' : ''}`, metricLabel]} />
+            {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+            <Bar dataKey="value" fill={color} radius={[0, 3, 3, 0]} label={{ position: 'right', fill: '#8892a4', fontSize: 9, formatter: (v: any) => `${v ?? ''}${isPct ? '%' : ''}` }} />
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
+}
+
+function InlineTable({ title, columns, rows }: { title: string; columns: string[]; rows: string[][] }) {
+  const RISK_CLR: Record<string, string> = { Critical: '#ef4444', High: '#f97316', Elevated: '#f59e0b', Moderate: '#eab308', Low: '#22c55e' };
+  const cellColor = (col: string, val: string) => {
+    if (RISK_CLR[val]) return RISK_CLR[val];
+    if (col === 'Prod %' || col === 'QC %') { const n = parseFloat(val); return isNaN(n) ? '#8892a4' : n >= 80 ? '#2ea55e' : n >= 50 ? '#d97706' : '#ef4444'; }
+    if (col === 'Wks DBL') { const n = parseFloat(val); return isNaN(n) ? '#8892a4' : n < 0 ? '#ef4444' : n <= 4 ? '#ef4444' : n <= 8 ? '#f97316' : '#8892a4'; }
+    return undefined;
+  };
+  return (
+    <div className="mt-2 rounded overflow-hidden" style={{ border: '1px solid rgba(255,255,255,0.07)' }}>
+      <div className="px-3 py-1.5 text-xs font-medium" style={{ background: 'rgba(26,92,56,0.25)', color: '#2ea55e' }}>{title}</div>
+      <div style={{ overflowX: 'auto' }}>
+        <table className="w-full text-xs" style={{ borderCollapse: 'collapse' }}>
+          <thead>
+            <tr style={{ background: '#1c2230', borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
+              {columns.map((c) => <th key={c} className="px-2 py-1.5 text-left whitespace-nowrap" style={{ color: '#8892a4', fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{c}</th>)}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row, i) => (
+              <tr key={i} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                {row.map((cell, j) => (
+                  <td key={j} className="px-2 py-1.5 whitespace-nowrap" style={{ color: cellColor(columns[j], cell) ?? (j === 0 ? '#e8eaf0' : '#8892a4'), fontWeight: j === 0 ? 500 : 400 }}>{cell}</td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 interface AllRecordsPanelProps {
   label: string;
   studies: Study[];
@@ -644,7 +698,12 @@ function AllRecordsPanel({ label, studies, filterStudy, granularMode, onClear, o
   );
 }
 
-type ChatMessage = { role: 'user' | 'assistant'; content: string };
+type ChatAction =
+  | { type: 'filter'; risk_tier?: string; fso_fsp?: string; client?: string; search?: string }
+  | { type: 'chart'; title: string; metric: string; metricLabel: string; data: { name: string; value: number }[] }
+  | { type: 'table'; title: string; columns: string[]; rows: string[][] };
+
+type ChatMessage = { role: 'user' | 'assistant'; content: string; action?: ChatAction };
 
 export default function ResultsTab({ studies, savedUpdates = [] }: { studies: Study[]; savedUpdates?: StudyUpdate[] }) {
   const [allStudies, setAllStudies] = useState(true);
@@ -821,13 +880,29 @@ export default function ResultsTab({ studies, savedUpdates = [] }: { studies: St
         `- ${s.study}: client=${s.client}, TA=${s.ta}, type=${s.fso_fsp}, risk=${effectiveTier(s, savedUpdates)}, prod=${s.prod_pct}%, qc=${s.qc_pct}%, delayed=${s.delayed}, sig_delays=${s.sig_delays}, weeks_to_dbl=${s.weeks_to_dbl ?? 'N/A'}`
       ).join('\n');
       const context = `Portfolio: ${sidebarFiltered.length} studies across ${new Set(sidebarFiltered.map((s) => s.client)).size} clients. Delayed: ${delayed}, At-risk: ${atRisk}, Avg prod: ${avgProd.toFixed(1)}%, Avg QC: ${avgQc.toFixed(1)}%.\n\nStudies:\n${studyLines}`;
+      const studiesPayload = sidebarFiltered.slice(0, 80).map((s) => ({
+        study: s.study, client: s.client, ta: s.ta, fso_fsp: s.fso_fsp,
+        risk_tier: effectiveTier(s, savedUpdates),
+        prod_pct: s.prod_pct, qc_pct: s.qc_pct,
+        failed_qc: s.failed_qc, sig_delays: s.sig_delays,
+        weeks_to_dbl: s.weeks_to_dbl, delayed: s.delayed, at_risk: s.at_risk,
+      }));
       const res = await fetch('/api/nlq', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query, context, history: chatHistory }),
+        body: JSON.stringify({ query, context, history: chatHistory, studies: studiesPayload }),
       });
       const data = await res.json();
-      setChatHistory([...updatedHistory, { role: 'assistant', content: data.response }]);
+      const action: ChatAction | undefined = data.action ?? undefined;
+
+      if (action?.type === 'filter') {
+        if (action.risk_tier) setRiskFilter(action.risk_tier === 'All' ? 'All' : action.risk_tier);
+        if (action.fso_fsp) setFsoFspFilter((action.fso_fsp === 'All' ? 'All' : action.fso_fsp) as 'All' | 'FSO' | 'FSP');
+        if (action.client) setClientTableFilter(action.client);
+        if (action.search) setTableSearch(action.search);
+      }
+
+      setChatHistory([...updatedHistory, { role: 'assistant', content: data.response, action }]);
     } catch {
       setChatHistory([...updatedHistory, { role: 'assistant', content: 'Unable to process query.' }]);
     } finally {
@@ -939,12 +1014,25 @@ export default function ResultsTab({ studies, savedUpdates = [] }: { studies: St
             {chatHistory.length > 0 && <button onClick={clearNlq} className="text-xs px-2 py-0.5 rounded" style={{ color: '#8892a4', background: 'rgba(255,255,255,0.05)' }}>Clear chat</button>}
           </div>
           {chatHistory.length > 0 && (
-            <div className="px-4 pb-2 space-y-2 max-h-48 overflow-y-auto">
+            <div className="px-4 pb-2 space-y-2 max-h-80 overflow-y-auto">
               {chatHistory.map((msg, i) => (
                 <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                  <div className="text-xs px-3 py-2 rounded-lg max-w-[85%]" style={msg.role === 'user' ? { background: 'rgba(46,165,94,0.15)', color: '#e8eaf0', border: '1px solid rgba(46,165,94,0.25)' } : { background: 'rgba(59,130,246,0.08)', color: '#93c5fd', border: '1px solid rgba(59,130,246,0.2)' }}>
+                  <div className="text-xs px-3 py-2 rounded-lg max-w-[92%]" style={msg.role === 'user' ? { background: 'rgba(46,165,94,0.15)', color: '#e8eaf0', border: '1px solid rgba(46,165,94,0.25)' } : { background: 'rgba(59,130,246,0.08)', color: '#93c5fd', border: '1px solid rgba(59,130,246,0.2)' }}>
                     {msg.content}
-                    {msg.role === 'assistant' && i === chatHistory.length - 1 && nlqActive && <span className="ml-2 text-xs" style={{ color: '#8892a4' }}>· {tableFiltered.length} studies shown</span>}
+                    {msg.role === 'assistant' && i === chatHistory.length - 1 && nlqActive && !msg.action && (
+                      <span className="ml-2 text-xs" style={{ color: '#8892a4' }}>· {tableFiltered.length} studies shown</span>
+                    )}
+                    {msg.role === 'assistant' && msg.action?.type === 'filter' && (
+                      <div className="mt-1.5 inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded" style={{ background: 'rgba(46,165,94,0.15)', color: '#2ea55e', border: '1px solid rgba(46,165,94,0.3)' }}>
+                        ✓ Filters applied · {tableFiltered.length} studies shown
+                      </div>
+                    )}
+                    {msg.role === 'assistant' && msg.action?.type === 'chart' && (
+                      <InlineChart title={msg.action.title} metric={msg.action.metric} metricLabel={msg.action.metricLabel} data={msg.action.data} />
+                    )}
+                    {msg.role === 'assistant' && msg.action?.type === 'table' && (
+                      <InlineTable title={msg.action.title} columns={msg.action.columns} rows={msg.action.rows} />
+                    )}
                   </div>
                 </div>
               ))}
