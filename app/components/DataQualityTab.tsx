@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend, BarChart, Bar, XAxis, YAxis } from 'recharts';
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend, BarChart, Bar, XAxis, YAxis, LabelList } from 'recharts';
 
 type DQIssue = {
   study: string;
@@ -78,11 +78,27 @@ const CATEGORY_META: Record<string, { label: string; color: string; bg: string }
 
 const DONUT_COLORS = ['#f97316', '#eab308', '#3b82f6', '#ef4444'];
 
+const CAT_KEYS = Object.keys(CATEGORY_META) as (keyof typeof CATEGORY_META)[];
+
 export default function DataQualityTab() {
+  const [view, setView] = useState<'issues' | 'summary'>('issues');
   const [categoryFilter, setCategoryFilter] = useState('All');
   const [search, setSearch] = useState('');
 
-  const categories = useMemo(() => ['All', ...Object.keys(CATEGORY_META)], []);
+  const categories = useMemo(() => ['All', ...CAT_KEYS], []);
+
+  // Study-level summary: each study with a count per category
+  const studySummary = useMemo(() => {
+    const map: Record<string, Record<string, number> & { total: number }> = {};
+    for (const r of DQ_DATA) {
+      if (!map[r.study]) map[r.study] = { total: 0, 'Incomplete deliverable coverage': 0, 'Missing metadata': 0, 'Missing upstream deliverables': 0, 'Status inconsistency': 0 };
+      map[r.study].total++;
+      map[r.study][r.category]++;
+    }
+    return Object.entries(map)
+      .map(([study, counts]) => ({ study, ...counts }))
+      .sort((a, b) => b.total - a.total);
+  }, []);
 
   const filtered = useMemo(() => {
     let rows = DQ_DATA;
@@ -124,8 +140,10 @@ export default function DataQualityTab() {
 
   return (
     <div className="p-5 space-y-5">
-      {/* KPI Cards */}
-      <div className="grid grid-cols-4 gap-3">
+      {/* KPI Cards + view toggle */}
+      <div className="flex items-start justify-between gap-4">
+        <div className="grid grid-cols-4 gap-3 flex-1">
+
         {[
           { label: 'Total Issues', value: DQ_DATA.length, color: '#ef4444' },
           { label: 'Studies Affected', value: studiesAffected, color: '#f97316' },
@@ -137,7 +155,97 @@ export default function DataQualityTab() {
             <div className="text-xs mt-1" style={{ color: '#8892a4' }}>{k.label}</div>
           </div>
         ))}
+        </div>
+        {/* View toggle */}
+        <div className="flex items-center gap-0 rounded-lg overflow-hidden flex-shrink-0" style={{ border: '1px solid rgba(255,255,255,0.1)', height: 'fit-content' }}>
+          {(['issues', 'summary'] as const).map((v) => (
+            <button key={v} onClick={() => setView(v)} className="px-4 py-2 text-sm font-medium transition-colors" style={view === v ? { background: '#2ea55e', color: '#fff' } : { background: 'transparent', color: '#8892a4' }}>
+              {v === 'issues' ? 'Issue Detail' : 'Study Summary'}
+            </button>
+          ))}
+        </div>
       </div>
+
+      {/* ── STUDY SUMMARY VIEW ── */}
+      {view === 'summary' && (
+        <>
+          {/* Stacked bar chart */}
+          <div className="rounded-lg p-4" style={{ background: '#161b24', border: '1px solid rgba(255,255,255,0.07)' }}>
+            <p className="text-sm font-semibold mb-3" style={{ color: '#e8eaf0' }}>Issues by Study — Category Breakdown</p>
+            <ResponsiveContainer width="100%" height={studySummary.length * 28 + 40}>
+              <BarChart layout="vertical" data={studySummary} margin={{ top: 0, right: 60, left: 4, bottom: 0 }}>
+                <XAxis type="number" tick={{ fill: '#8892a4', fontSize: 9 }} axisLine={false} tickLine={false} allowDecimals={false} />
+                <YAxis type="category" dataKey="study" tick={{ fill: '#e8eaf0', fontSize: 10 }} axisLine={false} tickLine={false} width={88} />
+                <Tooltip
+                  contentStyle={{ background: '#1c2230', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 6, fontSize: 11 }}
+                  labelStyle={{ color: '#e8eaf0' }} itemStyle={{ color: '#8892a4' }}
+                  formatter={(value, name) => [value, CATEGORY_META[name as string]?.label ?? name]}
+                />
+                {CAT_KEYS.map((cat) => (
+                  <Bar key={cat} dataKey={cat} stackId="a" fill={CATEGORY_META[cat].color} name={cat}
+                    radius={cat === 'Status inconsistency' ? [0, 3, 3, 0] : undefined}>
+                    {cat === 'Status inconsistency' && <LabelList dataKey="total" position="right" style={{ fill: '#8892a4', fontSize: 9 }} />}
+                  </Bar>
+                ))}
+              </BarChart>
+            </ResponsiveContainer>
+            <div className="flex flex-wrap gap-4 mt-3 px-1">
+              {CAT_KEYS.map((cat) => (
+                <div key={cat} className="flex items-center gap-1.5">
+                  <div className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ background: CATEGORY_META[cat].color }} />
+                  <span className="text-xs" style={{ color: '#8892a4' }}>{CATEGORY_META[cat].label}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Summary table */}
+          <div className="rounded-lg overflow-hidden" style={{ background: '#161b24', border: '1px solid rgba(255,255,255,0.07)' }}>
+            <div className="px-4 py-3" style={{ background: '#1a5c38' }}>
+              <p className="text-sm font-bold text-white">Study Summary — {studySummary.length} Studies Affected</p>
+            </div>
+            <div style={{ overflowX: 'auto' }}>
+              <table className="w-full text-xs" style={{ borderCollapse: 'collapse' }}>
+                <thead style={{ background: '#1c2230' }}>
+                  <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
+                    <th className="text-left px-4 py-2" style={{ color: '#8892a4', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Study</th>
+                    <th className="text-center px-3 py-2" style={{ color: '#8892a4', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Total</th>
+                    {CAT_KEYS.map((cat) => (
+                      <th key={cat} className="text-center px-3 py-2 whitespace-nowrap" style={{ color: CATEGORY_META[cat].color, fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{CATEGORY_META[cat].label}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {studySummary.map((row) => (
+                    <tr
+                      key={row.study}
+                      className="hover:bg-white/[0.02] cursor-pointer transition-colors"
+                      style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}
+                      onClick={() => { setView('issues'); setSearch(row.study); }}
+                    >
+                      <td className="px-4 py-2 font-medium" style={{ color: '#e8eaf0' }}>{row.study}</td>
+                      <td className="px-3 py-2 text-center font-bold" style={{ color: '#e8eaf0' }}>{row.total}</td>
+                      {CAT_KEYS.map((cat) => {
+                        const val = (row as unknown as Record<string, number>)[cat] ?? 0;
+                        return (
+                          <td key={cat} className="px-3 py-2 text-center">
+                            {val > 0 ? (
+                              <span className="inline-flex items-center justify-center w-6 h-6 rounded-full text-xs font-bold" style={{ background: CATEGORY_META[cat].bg, color: CATEGORY_META[cat].color }}>{val}</span>
+                            ) : <span style={{ color: '#374151' }}>—</span>}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* ── ISSUE DETAIL VIEW ── */}
+      {view === 'issues' && (<>
 
       {/* Charts */}
       <div className="grid grid-cols-2 gap-5">
@@ -252,6 +360,8 @@ export default function DataQualityTab() {
           </table>
         </div>
       </div>
+
+      </>)}  {/* end issues view */}
     </div>
   );
 }

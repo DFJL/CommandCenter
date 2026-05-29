@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import {
   PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend,
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
@@ -135,6 +135,52 @@ export default function ProgrammingIssuesTab({ findings }: { findings: P21Findin
   const openCount = COMMENTS.filter((c) => c.status === 'Open').length;
   const closedCount = COMMENTS.filter((c) => c.status === 'Closed').length;
 
+  // ── Comments NLP chat ──────────────────────────────────
+  type ComChatMsg = { role: 'user' | 'assistant'; content: string; filtered?: number };
+  const [comChat, setComChat] = useState<ComChatMsg[]>([]);
+  const [comChatInput, setComChatInput] = useState('');
+  const [comChatLoading, setComChatLoading] = useState(false);
+
+  const handleCommentNlq = useCallback(async (q?: string) => {
+    const query = q ?? comChatInput;
+    if (!query.trim()) return;
+    const userMsg: ComChatMsg = { role: 'user', content: query };
+    const updatedHistory = [...comChat, userMsg];
+    setComChat(updatedHistory);
+    setComChatInput('');
+    setComChatLoading(true);
+    try {
+      const byType = comIssueTypeData.slice(0, 6).map((d) => `${d.name}: ${d.value}`).join(', ');
+      const byDel = comDelTypeData.map((d) => `${d.name}: ${d.value}`).join(', ');
+      const context = `Total: ${COMMENTS.length} comments. Open: ${openCount}, Closed: ${closedCount}.\nBy deliverable: ${byDel}.\nBy issue type: ${byType}.`;
+      const commentsPayload = COMMENTS.slice(0, 300).map((c) => ({
+        id: c.id, deliverable_type: c.deliverable_type, dataset: c.dataset,
+        issue: c.issue.slice(0, 120), issue_type: c.issue_type, status: c.status,
+      }));
+      const res = await fetch('/api/nlq-comments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query, context, history: comChat, comments: commentsPayload }),
+      });
+      const data = await res.json();
+      const action = data.action;
+      if (action?.type === 'filter_comments') {
+        if (action.deliverable_type) setComDelType(action.deliverable_type === 'All' ? 'All' : action.deliverable_type);
+        if (action.status) setComStatus(action.status === 'All' ? 'All' : action.status);
+        if (action.issue_type) setComIssueType(action.issue_type === 'All' ? 'All' : action.issue_type);
+        if (action.search !== undefined) setComSearch(action.search);
+      }
+      const filtered = action?.type === 'filter_comments' ? undefined : undefined;
+      setComChat([...updatedHistory, { role: 'assistant', content: data.response, filtered }]);
+    } catch {
+      setComChat([...updatedHistory, { role: 'assistant', content: 'Unable to process query.' }]);
+    } finally {
+      setComChatLoading(false);
+    }
+  }, [comChatInput, comChat, openCount, closedCount, comIssueTypeData, comDelTypeData]);
+
+  const COM_CHIPS = ['Open issues only', 'SDTM issues', 'Calculation errors', 'Mock Shell updates'];
+
   const inputStyle = { background: '#1c2230', color: '#e8eaf0', borderColor: 'rgba(255,255,255,0.1)' } as const;
 
   return (
@@ -239,6 +285,53 @@ export default function ProgrammingIssuesTab({ findings }: { findings: P21Findin
       {/* ═══════ PROGRAMMING COMMENTS ═══════ */}
       {mode === 'comments' && (
         <>
+          {/* AI Query */}
+          <div className="rounded-lg" style={{ background: '#161b24', border: '1px solid rgba(255,255,255,0.07)' }}>
+            <div className="px-4 pt-3 pb-2 flex items-center justify-between">
+              <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: '#8892a4' }}>AI Query</p>
+              {comChat.length > 0 && <button onClick={() => { setComChat([]); setComDelType('All'); setComStatus('All'); setComIssueType('All'); setComSearch(''); }} className="text-xs px-2 py-0.5 rounded" style={{ color: '#8892a4', background: 'rgba(255,255,255,0.05)' }}>Clear</button>}
+            </div>
+            {comChat.length > 0 && (
+              <div className="px-4 pb-2 space-y-2 max-h-48 overflow-y-auto">
+                {comChat.map((msg, i) => (
+                  <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                    <div className="text-xs px-3 py-2 rounded-lg max-w-[88%]" style={msg.role === 'user'
+                      ? { background: 'rgba(46,165,94,0.15)', color: '#e8eaf0', border: '1px solid rgba(46,165,94,0.25)' }
+                      : { background: 'rgba(59,130,246,0.08)', color: '#93c5fd', border: '1px solid rgba(59,130,246,0.2)' }}>
+                      {msg.content}
+                      {msg.role === 'assistant' && i === comChat.length - 1 && (
+                        <span className="ml-2 text-xs" style={{ color: '#8892a4' }}>· {comFiltered.length} shown</span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+                {comChatLoading && (
+                  <div className="flex justify-start">
+                    <div className="text-xs px-3 py-2 rounded-lg flex items-center gap-2" style={{ background: 'rgba(59,130,246,0.08)', color: '#93c5fd', border: '1px solid rgba(59,130,246,0.2)' }}>
+                      <div className="w-3 h-3 border border-t-transparent rounded-full animate-spin" style={{ borderColor: '#3b82f6', borderTopColor: 'transparent' }} />
+                      Analyzing…
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+            <div className="px-4 pb-3">
+              <div className="flex gap-2 mb-2">
+                <input type="text" value={comChatInput} onChange={(e) => setComChatInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleCommentNlq()} placeholder={comChat.length > 0 ? 'Continue the conversation…' : 'Ask about these comments…'} className="flex-1 text-sm rounded px-3 py-2 border outline-none" style={inputStyle} />
+                <button onClick={() => handleCommentNlq()} disabled={comChatLoading} className="px-4 py-2 rounded text-sm font-medium" style={{ background: '#2ea55e', color: '#fff', opacity: comChatLoading ? 0.6 : 1 }}>
+                  {comChatLoading ? '…' : comChat.length > 0 ? 'Send' : 'Ask'}
+                </button>
+              </div>
+              {comChat.length === 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {COM_CHIPS.map((chip) => (
+                    <button key={chip} onClick={() => handleCommentNlq(chip)} className="text-xs px-3 py-1 rounded-full border" style={{ borderColor: 'rgba(46,165,94,0.4)', color: '#2ea55e', background: 'rgba(46,165,94,0.08)' }}>{chip}</button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
           <div className="grid grid-cols-4 gap-3">
             {[
               { label: 'Total Comments', value: COMMENTS.length, color: '#3b82f6' },
