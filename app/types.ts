@@ -101,3 +101,23 @@ export type CustomStudy = {
   id: string; study: string; client: string; ta: string;
   fso_fsp: 'FSO' | 'FSP'; phase: string; addedAt: string;
 };
+
+export type DeliverableRow = {
+  id: string;
+  study: string;
+  deliverable_type: 'SDTMs' | 'ADaMs' | 'Tables' | 'Figures' | 'Listings' | 'Define.xml';
+  savedAt: string;
+  data_type_description: string;
+  dataset_name: string;
+  data_spec_author: string;
+  qc_method: string;
+  production_programmer: string;
+  program_name: string;
+  program_status: string;
+  date_prod_last_run: string;
+  qc_reviewer: string;
+  qc_program_name: string;
+  qc_status: string;
+  date_qc_last_run: string;
+  comments: string;
+};
