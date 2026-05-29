@@ -65,17 +65,39 @@ export type StudyUpdate = {
   savedAt: string;
   milestones: MilestoneEntry[];
   deliverables: {
-    sdtm: string;
-    adam: string;
-    tfls: string;
-    define: string;
+    sdtm: string; adam: string; tfls: string; define: string;
+    tables?: string; listings?: string; figures?: string;
   };
-  issue: {
-    date: string;
-    category: string;
-    severity: string;
-    description: string;
-  };
+  issue: { date: string; category: string; severity: string; description: string };
   comments: string;
   riskBump: number;
+};
+
+export type StudyMetadata = {
+  id: string; study: string; savedAt: string;
+  // General Study Information
+  protocol_plan_no: string; sponsor: string; fortrea_study_id: string;
+  timesheet_billing_code: string; lead_statistician: string; lead_programmer: string;
+  study_project_manager: string; data_mgmt_contact: string;
+  deliverable_description: string; deliverable_date: string;
+  // Study Details
+  therapeutic_area: string; study_phase: string; raw_data_path: string;
+  sdtm_data_path: string; adam_path: string; sdtm_spec_path: string;
+  adam_spec_path: string; client_comments_tracker: string;
+  tlfs_path: string; key_programmers: string; project_tracker_path: string;
+};
+
+export type IssueLogEntry = {
+  id: string; study: string; savedAt: string;
+  no: number; title: string; table_number: string; issue_description: string;
+  issue_type: string; initially_reported_by: string; initial_report_date: string;
+  responsible_party: string;
+  issue_status: 'Open' | 'In Progress' | 'Resolved' | 'Closed';
+  resolved_by: string; final_date_resolved: string;
+  comments: string; resolution: string;
+};
+
+export type CustomStudy = {
+  id: string; study: string; client: string; ta: string;
+  fso_fsp: 'FSO' | 'FSP'; phase: string; addedAt: string;
 };
