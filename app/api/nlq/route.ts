@@ -136,7 +136,8 @@ export async function POST(req: NextRequest) {
 
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
-    return Response.json({ response: patternMatch(query, context), action: execPatternAction(query) });
+    const { text, action } = patternFallback(query, studies);
+    return Response.json({ response: text, action });
   }
 
   try {
@@ -205,27 +206,62 @@ export async function POST(req: NextRequest) {
     return Response.json({ response: txt?.text ?? 'No response.', action: null });
   } catch (err) {
     console.error('[nlq] error:', err);
-    return Response.json({ response: patternMatch(query, context), action: execPatternAction(query) });
+    const { text, action } = patternFallback(query, studies);
+    return Response.json({ response: text, action });
   }
 }
 
-function patternMatch(query: string, _context: string): string {
-  const q = query.toLowerCase();
-  if (/high.risk|critical/.test(q)) return 'Showing Critical and High risk studies.';
-  if (/delayed|overdue/.test(q)) return 'Showing delayed studies.';
-  if (/qc.below|qc under/.test(q)) { const m = q.match(/\d+/); return `Showing studies with QC below ${m?.[0] ?? 70}%.`; }
-  if (/4 week|dbl/.test(q)) return 'Showing studies within 4 weeks of DBL.';
-  if (/fsp/.test(q)) return 'Showing FSP studies.';
-  if (/fso/.test(q)) return 'Showing FSO studies.';
-  return `Searching for: "${query}"`;
+function detectMetric(q: string): string {
+  if (/qc.fail|failed.qc/.test(q)) return 'failed_qc';
+  if (/sig.delay|significant.delay/.test(q)) return 'sig_delays';
+  if (/qc/.test(q)) return 'qc_pct';
+  if (/prod|production|complete/.test(q)) return 'prod_pct';
+  if (/delay/.test(q)) return 'sig_delays';
+  return 'qc_pct';
 }
 
-function execPatternAction(query: string): ReturnType<typeof execFilter> | null {
+function detectGroupBy(q: string): string {
+  if (/\bta\b|therapeutic|area/.test(q)) return 'ta';
+  if (/risk/.test(q)) return 'risk_tier';
+  if (/type|fso|fsp/.test(q)) return 'fso_fsp';
+  return 'client';
+}
+
+function patternFallback(query: string, studies: StudyRow[]): { text: string; action: ReturnType<typeof execFilter> | ReturnType<typeof execChart> | ReturnType<typeof execTable> | null } {
   const q = query.toLowerCase();
-  if (/critical/.test(q)) return execFilter({ risk_tier: 'Critical' });
-  if (/high.risk/.test(q)) return execFilter({ risk_tier: 'High' });
-  if (/delayed|overdue/.test(q)) return execFilter({ search: 'delayed' });
-  if (/fsp/.test(q)) return execFilter({ fso_fsp: 'FSP' });
-  if (/fso/.test(q)) return execFilter({ fso_fsp: 'FSO' });
-  return null;
+
+  // Chart intent: compare, chart, visualize, by X, which X has...
+  if (/compare|chart|graph|visuali[sz]e|plot|by (client|sponsor|ta|type|risk)|which (client|ta|type|risk)/.test(q)) {
+    const metric = detectMetric(q);
+    const group_by = detectGroupBy(q);
+    const metricLabel = METRIC_LABEL[metric] ?? metric;
+    const title = `${metricLabel} by ${group_by === 'risk_tier' ? 'Risk Tier' : group_by === 'fso_fsp' ? 'Type' : group_by === 'ta' ? 'Therapeutic Area' : 'Client'}`;
+    const action = execChart({ title, metric, group_by }, studies);
+    return { text: `Here's ${title.toLowerCase()} across your portfolio.`, action };
+  }
+
+  // Table intent: list, rank, top N, worst, best, give me a table
+  if (/\blist\b|rank|top \d|worst|best|table|bottom \d/.test(q)) {
+    const metric = detectMetric(q);
+    const isAsc = /worst|lowest|bottom|least/.test(q);
+    const limitMatch = q.match(/top (\d+)|bottom (\d+)/);
+    const limit = limitMatch ? parseInt(limitMatch[1] ?? limitMatch[2]) : 10;
+    const title = `${isAsc ? 'Bottom' : 'Top'} ${limit} studies by ${METRIC_LABEL[metric] ?? metric}`;
+    const action = execTable({ title, sort_by: metric, sort_order: isAsc ? 'asc' : 'desc', limit }, studies);
+    return { text: `${title} across your portfolio.`, action };
+  }
+
+  // Filter intent
+  if (/critical/.test(q)) return { text: 'Showing Critical risk studies.', action: execFilter({ risk_tier: 'Critical' }) };
+  if (/high.risk|high risk/.test(q)) return { text: 'Showing High risk studies.', action: execFilter({ risk_tier: 'High' }) };
+  if (/elevated/.test(q)) return { text: 'Showing Elevated risk studies.', action: execFilter({ risk_tier: 'Elevated' }) };
+  if (/delayed|overdue/.test(q)) return { text: 'Showing delayed studies.', action: execFilter({ search: 'delayed' }) };
+  if (/\bfsp\b/.test(q)) return { text: 'Showing FSP studies.', action: execFilter({ fso_fsp: 'FSP' }) };
+  if (/\bfso\b/.test(q)) return { text: 'Showing FSO studies.', action: execFilter({ fso_fsp: 'FSO' }) };
+  if (/4 week|dbl/.test(q)) return { text: 'Showing studies within 4 weeks of DBL.', action: execFilter({ search: '4 weeks' }) };
+
+  const m = q.match(/qc.{0,10}below (\d+)/);
+  if (m) return { text: `Showing studies with QC below ${m[1]}%.`, action: execFilter({ risk_tier: 'All' }) };
+
+  return { text: `Searching for: "${query}"`, action: null };
 }
