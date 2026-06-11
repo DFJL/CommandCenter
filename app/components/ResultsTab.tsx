@@ -719,14 +719,15 @@ export default function ResultsTab({ studies, savedUpdates = [] }: { studies: St
   const [nlqActive, setNlqActive] = useState(false);
   const [nlqQuery, setNlqQuery] = useState('');
   const [tableSearch, setTableSearch] = useState('');
-  const [clientTableFilter, setClientTableFilter] = useState('All');
+  const [tableSponsorFilter, setTableSponsorFilter] = useState('All');
+  const [tablePortfolioFilter, setTablePortfolioFilter] = useState('All');
   const [sortMode, setSortMode] = useState<'severity' | 'score'>('severity');
-  const [expandedClients, setExpandedClients] = useState<Set<string>>(new Set());
   const [selectedStudy, setSelectedStudy] = useState<string | null>(null);
   const [granularMode, setGranularMode] = useState(false);
   const [fsoFspFilter, setFsoFspFilter] = useState<'All' | 'FSO' | 'FSP'>('All');
   const [riskFilter, setRiskFilter] = useState<string>('All');
   const [downloadToast, setDownloadToast] = useState(false);
+  const [showAiQuery, setShowAiQuery] = useState(false);
 
   const clients = useMemo(
     () => ['All', ...Array.from(new Set(studies.map((s) => s.client))).sort()],
@@ -757,73 +758,40 @@ export default function ResultsTab({ studies, savedUpdates = [] }: { studies: St
     let filtered = nlqFiltered;
     if (tableSearch) {
       const q = tableSearch.toLowerCase();
-      filtered = filtered.filter((s) => s.study.toLowerCase().includes(q) || s.client.toLowerCase().includes(q));
+      filtered = filtered.filter((s) => s.study.toLowerCase().includes(q) || s.client.toLowerCase().includes(q) || s.portfolio.toLowerCase().includes(q));
     }
-    if (clientTableFilter !== 'All') {
-      filtered = filtered.filter((s) => s.client === clientTableFilter);
+    if (tableSponsorFilter !== 'All') {
+      filtered = filtered.filter((s) => s.client === tableSponsorFilter);
+    }
+    if (tablePortfolioFilter !== 'All') {
+      filtered = filtered.filter((s) => s.portfolio === tablePortfolioFilter);
     }
     if (riskFilter !== 'All') {
       filtered = filtered.filter((s) => effectiveTier(s, savedUpdates) === riskFilter);
     }
     return filtered;
-  }, [nlqFiltered, tableSearch, clientTableFilter, riskFilter, savedUpdates]);
+  }, [nlqFiltered, tableSearch, tableSponsorFilter, tablePortfolioFilter, riskFilter, savedUpdates]);
 
-  const groupedByClient = useMemo(() => {
-    const groups: Record<string, Study[]> = {};
-    tableFiltered.forEach((s) => {
-      if (!groups[s.client]) groups[s.client] = [];
-      groups[s.client].push(s);
-    });
-    return Object.entries(groups)
-      .map(([client, clientStudies]) => {
-        const sorted = [...clientStudies].sort((a, b) =>
-          sortMode === 'severity'
-            ? RISK_ORDER[effectiveTier(a, savedUpdates)] - RISK_ORDER[effectiveTier(b, savedUpdates)]
-            : effectiveScore(b, savedUpdates) - effectiveScore(a, savedUpdates)
-        );
-        const worstRiskOrder = Math.min(...clientStudies.map((s) => RISK_ORDER[effectiveTier(s, savedUpdates)]));
-        const avgScore = clientStudies.reduce((sum, s) => sum + effectiveScore(s, savedUpdates), 0) / clientStudies.length;
-        return { client, studies: sorted, worstRiskOrder, avgScore };
-      })
-      .sort((a, b) =>
-        sortMode === 'severity' ? a.worstRiskOrder - b.worstRiskOrder : b.avgScore - a.avgScore
-      );
-  }, [tableFiltered, sortMode, savedUpdates]);
+  const sortedStudies = useMemo(() => [...tableFiltered].sort((a, b) =>
+    sortMode === 'severity'
+      ? RISK_ORDER[effectiveTier(a, savedUpdates)] - RISK_ORDER[effectiveTier(b, savedUpdates)]
+      : effectiveScore(b, savedUpdates) - effectiveScore(a, savedUpdates)
+  ), [tableFiltered, sortMode, savedUpdates]);
 
   const delayed = sidebarFiltered.filter((s) => s.delayed).length;
   const atRisk = sidebarFiltered.filter((s) => s.at_risk).length;
   const avgProd = sidebarFiltered.length > 0 ? sidebarFiltered.reduce((a, s) => a + s.prod_pct, 0) / sidebarFiltered.length : 0;
   const avgQc = sidebarFiltered.length > 0 ? sidebarFiltered.reduce((a, s) => a + s.qc_pct, 0) / sidebarFiltered.length : 0;
 
-  // Chart scopes to selected study > expanded client(s) > all filtered studies
-  // Bottom panel scope: selected study > expanded client(s) > all filtered
-  const bottomPanelStudies = useMemo(() => {
-    if (selectedStudy) return tableFiltered;
-    if (expandedClients.size > 0) return tableFiltered.filter((s) => expandedClients.has(s.client));
-    return tableFiltered;
-  }, [tableFiltered, selectedStudy, expandedClients]);
-
-  const bottomPanelLabel = selectedStudy
-    ? selectedStudy
-    : expandedClients.size === 1
-    ? [...expandedClients][0]
-    : expandedClients.size > 1
-    ? `${expandedClients.size} clients`
-    : 'All Records';
+  const bottomPanelStudies = tableFiltered;
+  const bottomPanelLabel = selectedStudy ?? 'All Records';
 
   const chartStudies = useMemo(() => {
     if (selectedStudy) return tableFiltered.filter((s) => s.study === selectedStudy);
-    if (expandedClients.size > 0) return tableFiltered.filter((s) => expandedClients.has(s.client));
     return tableFiltered;
-  }, [tableFiltered, selectedStudy, expandedClients]);
+  }, [tableFiltered, selectedStudy]);
 
-  const chartLabel = selectedStudy
-    ? selectedStudy
-    : expandedClients.size === 1
-    ? [...expandedClients][0]
-    : expandedClients.size > 1
-    ? `${expandedClients.size} clients`
-    : null;
+  const chartLabel = selectedStudy ?? null;
 
   const chartAvgProd = chartStudies.length > 0 ? chartStudies.reduce((a, s) => a + s.prod_pct, 0) / chartStudies.length : 0;
   const chartAvgQc = chartStudies.length > 0 ? chartStudies.reduce((a, s) => a + s.qc_pct, 0) / chartStudies.length : 0;
@@ -845,24 +813,15 @@ export default function ResultsTab({ studies, savedUpdates = [] }: { studies: St
   const trendDeltaQc = +(trendData[trendData.length - 1].qc_pct - trendData[trendData.length - 2].qc_pct).toFixed(1);
 
   const handleReset = () => {
-    setExpandedClients(new Set());
     setSelectedStudy(null);
     setGranularMode(false);
     setFsoFspFilter('All');
     setRiskFilter('All');
     setNlqActive(false);
     setNlqQuery('');
-    setClientTableFilter('All');
     setTableSearch('');
-  };
-
-  const toggleClient = (client: string) => {
-    setExpandedClients((prev) => {
-      const next = new Set(prev);
-      if (next.has(client)) { next.delete(client); setSelectedStudy(null); setGranularMode(false); }
-      else next.add(client);
-      return next;
-    });
+    setTableSponsorFilter('All');
+    setTablePortfolioFilter('All');
   };
 
   const handleNlq = async (q?: string) => {
@@ -898,7 +857,7 @@ export default function ResultsTab({ studies, savedUpdates = [] }: { studies: St
       if (action?.type === 'filter') {
         if (action.risk_tier) setRiskFilter(action.risk_tier === 'All' ? 'All' : action.risk_tier);
         if (action.fso_fsp) setFsoFspFilter((action.fso_fsp === 'All' ? 'All' : action.fso_fsp) as 'All' | 'FSO' | 'FSP');
-        if (action.client) setClientTableFilter(action.client);
+        if (action.client) setTableSponsorFilter(action.client);
         if (action.search) setTableSearch(action.search);
       }
 
@@ -1007,60 +966,73 @@ export default function ResultsTab({ studies, savedUpdates = [] }: { studies: St
           </div>
         </div>
 
-        {/* AI Query */}
+        {/* AI Query — collapsed by default */}
         <div className="rounded-lg" style={{ background: '#161b24', border: '1px solid rgba(255,255,255,0.07)' }}>
-          <div className="px-4 pt-3 pb-2 flex items-center justify-between">
-            <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: '#8892a4' }}>AI Query</p>
-            {chatHistory.length > 0 && <button onClick={clearNlq} className="text-xs px-2 py-0.5 rounded" style={{ color: '#8892a4', background: 'rgba(255,255,255,0.05)' }}>Clear chat</button>}
-          </div>
-          {chatHistory.length > 0 && (
-            <div className="px-4 pb-2 space-y-2 max-h-80 overflow-y-auto">
-              {chatHistory.map((msg, i) => (
-                <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                  <div className="text-xs px-3 py-2 rounded-lg max-w-[92%]" style={msg.role === 'user' ? { background: 'rgba(46,165,94,0.15)', color: '#e8eaf0', border: '1px solid rgba(46,165,94,0.25)' } : { background: 'rgba(59,130,246,0.08)', color: '#93c5fd', border: '1px solid rgba(59,130,246,0.2)' }}>
-                    {msg.content}
-                    {msg.role === 'assistant' && i === chatHistory.length - 1 && nlqActive && !msg.action && (
-                      <span className="ml-2 text-xs" style={{ color: '#8892a4' }}>· {tableFiltered.length} studies shown</span>
-                    )}
-                    {msg.role === 'assistant' && msg.action?.type === 'filter' && (
-                      <div className="mt-1.5 inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded" style={{ background: 'rgba(46,165,94,0.15)', color: '#2ea55e', border: '1px solid rgba(46,165,94,0.3)' }}>
-                        ✓ Filters applied · {tableFiltered.length} studies shown
+          <button
+            className="w-full flex items-center justify-between px-4 py-2.5"
+            onClick={() => setShowAiQuery((v) => !v)}
+            style={{ color: '#8892a4' }}
+          >
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-semibold uppercase tracking-wider">AI Query</span>
+              {chatHistory.length > 0 && <span className="text-xs px-1.5 py-0.5 rounded-full" style={{ background: 'rgba(46,165,94,0.15)', color: '#2ea55e' }}>{chatHistory.filter(m => m.role === 'user').length} messages</span>}
+            </div>
+            <span className="text-xs">{showAiQuery ? '▲ Hide' : '▼ Show'}</span>
+          </button>
+          {showAiQuery && (
+            <>
+              {chatHistory.length > 0 && (
+                <div className="px-4 pb-2 space-y-2 max-h-80 overflow-y-auto" style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+                  <div className="pt-2" />
+                  {chatHistory.map((msg, i) => (
+                    <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                      <div className="text-xs px-3 py-2 rounded-lg max-w-[92%]" style={msg.role === 'user' ? { background: 'rgba(46,165,94,0.15)', color: '#e8eaf0', border: '1px solid rgba(46,165,94,0.25)' } : { background: 'rgba(59,130,246,0.08)', color: '#93c5fd', border: '1px solid rgba(59,130,246,0.2)' }}>
+                        {msg.content}
+                        {msg.role === 'assistant' && i === chatHistory.length - 1 && nlqActive && !msg.action && (
+                          <span className="ml-2 text-xs" style={{ color: '#8892a4' }}>· {tableFiltered.length} studies shown</span>
+                        )}
+                        {msg.role === 'assistant' && msg.action?.type === 'filter' && (
+                          <div className="mt-1.5 inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded" style={{ background: 'rgba(46,165,94,0.15)', color: '#2ea55e', border: '1px solid rgba(46,165,94,0.3)' }}>
+                            ✓ Filters applied · {tableFiltered.length} studies shown
+                          </div>
+                        )}
+                        {msg.role === 'assistant' && msg.action?.type === 'chart' && (
+                          <InlineChart title={msg.action.title} metric={msg.action.metric} metricLabel={msg.action.metricLabel} data={msg.action.data} />
+                        )}
+                        {msg.role === 'assistant' && msg.action?.type === 'table' && (
+                          <InlineTable title={msg.action.title} columns={msg.action.columns} rows={msg.action.rows} />
+                        )}
                       </div>
-                    )}
-                    {msg.role === 'assistant' && msg.action?.type === 'chart' && (
-                      <InlineChart title={msg.action.title} metric={msg.action.metric} metricLabel={msg.action.metricLabel} data={msg.action.data} />
-                    )}
-                    {msg.role === 'assistant' && msg.action?.type === 'table' && (
-                      <InlineTable title={msg.action.title} columns={msg.action.columns} rows={msg.action.rows} />
-                    )}
-                  </div>
-                </div>
-              ))}
-              {nlqLoading && (
-                <div className="flex justify-start">
-                  <div className="text-xs px-3 py-2 rounded-lg flex items-center gap-2" style={{ background: 'rgba(59,130,246,0.08)', color: '#93c5fd', border: '1px solid rgba(59,130,246,0.2)' }}>
-                    <div className="w-3 h-3 border border-t-transparent rounded-full animate-spin" style={{ borderColor: '#3b82f6', borderTopColor: 'transparent' }} />
-                    Analyzing…
-                  </div>
+                    </div>
+                  ))}
+                  {nlqLoading && (
+                    <div className="flex justify-start">
+                      <div className="text-xs px-3 py-2 rounded-lg flex items-center gap-2" style={{ background: 'rgba(59,130,246,0.08)', color: '#93c5fd', border: '1px solid rgba(59,130,246,0.2)' }}>
+                        <div className="w-3 h-3 border border-t-transparent rounded-full animate-spin" style={{ borderColor: '#3b82f6', borderTopColor: 'transparent' }} />
+                        Analyzing…
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
-            </div>
-          )}
-          <div className="px-4 pb-3">
-            <div className="flex gap-2 mb-2">
-              <input type="text" value={nlqInput} onChange={(e) => setNlqInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleNlq()} placeholder={chatHistory.length > 0 ? 'Continue the conversation…' : 'Ask about your portfolio…'} className="flex-1 text-sm rounded px-3 py-2 border outline-none" style={{ background: '#1c2230', color: '#e8eaf0', borderColor: 'rgba(255,255,255,0.1)' }} />
-              <button onClick={() => handleNlq()} disabled={nlqLoading} className="px-4 py-2 rounded text-sm font-medium" style={{ background: '#2ea55e', color: '#fff', opacity: nlqLoading ? 0.6 : 1 }}>
-                {nlqLoading ? '…' : chatHistory.length > 0 ? 'Send' : 'Ask'}
-              </button>
-            </div>
-            {chatHistory.length === 0 && (
-              <div className="flex flex-wrap gap-2">
-                {QUICK_CHIPS.map((chip) => (
-                  <button key={chip} onClick={() => { setNlqInput(chip); handleNlq(chip); }} className="text-xs px-3 py-1 rounded-full border" style={{ borderColor: 'rgba(46,165,94,0.4)', color: '#2ea55e', background: 'rgba(46,165,94,0.08)' }}>{chip}</button>
-                ))}
+              <div className="px-4 pb-3 pt-2" style={{ borderTop: chatHistory.length === 0 ? '1px solid rgba(255,255,255,0.05)' : undefined }}>
+                <div className="flex gap-2 mb-2">
+                  <input type="text" value={nlqInput} onChange={(e) => setNlqInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleNlq()} placeholder={chatHistory.length > 0 ? 'Continue the conversation…' : 'Ask about your portfolio…'} className="flex-1 text-sm rounded px-3 py-2 border outline-none" style={{ background: '#1c2230', color: '#e8eaf0', borderColor: 'rgba(255,255,255,0.1)' }} />
+                  <button onClick={() => handleNlq()} disabled={nlqLoading} className="px-4 py-2 rounded text-sm font-medium" style={{ background: '#2ea55e', color: '#fff', opacity: nlqLoading ? 0.6 : 1 }}>
+                    {nlqLoading ? '…' : chatHistory.length > 0 ? 'Send' : 'Ask'}
+                  </button>
+                  {chatHistory.length > 0 && <button onClick={clearNlq} className="text-xs px-2 py-1 rounded" style={{ color: '#8892a4', background: 'rgba(255,255,255,0.05)' }}>Clear</button>}
+                </div>
+                {chatHistory.length === 0 && (
+                  <div className="flex flex-wrap gap-2">
+                    {QUICK_CHIPS.map((chip) => (
+                      <button key={chip} onClick={() => { setNlqInput(chip); handleNlq(chip); }} className="text-xs px-3 py-1 rounded-full border" style={{ borderColor: 'rgba(46,165,94,0.4)', color: '#2ea55e', background: 'rgba(46,165,94,0.08)' }}>{chip}</button>
+                    ))}
+                  </div>
+                )}
               </div>
-            )}
-          </div>
+            </>
+          )}
         </div>
 
         {/* Completion Over Time — responds to filters */}
@@ -1072,7 +1044,7 @@ export default function ResultsTab({ studies, savedUpdates = [] }: { studies: St
                 {chartLabel && (
                   <span className="ml-2 text-xs font-normal" style={{ color: '#2ea55e' }}>— {chartLabel}</span>
                 )}
-                {(fsoFspFilter !== 'All' || nlqActive || riskFilter !== 'All' || !!tableSearch || clientTableFilter !== 'All') && (
+                {(fsoFspFilter !== 'All' || nlqActive || riskFilter !== 'All' || !!tableSearch || tableSponsorFilter !== 'All' || tablePortfolioFilter !== 'All') && (
                   <span className="ml-2 text-xs font-normal" style={{ color: '#3b82f6' }}>· filtered</span>
                 )}
               </p>
@@ -1101,14 +1073,10 @@ export default function ResultsTab({ studies, savedUpdates = [] }: { studies: St
           <div className="flex items-center justify-between px-4 py-3 flex-wrap gap-2" style={{ borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
             <p className="text-sm font-semibold" style={{ color: '#e8eaf0' }}>
               Delivery Portfolio
-              <span className="ml-2 text-xs font-normal" style={{ color: '#8892a4' }}>({tableFiltered.length} studies · {groupedByClient.length} clients)</span>
+              <span className="ml-2 text-xs font-normal" style={{ color: '#8892a4' }}>({tableFiltered.length} studies)</span>
             </p>
             <div className="flex items-center gap-2 flex-wrap">
               <input type="text" value={tableSearch} onChange={(e) => setTableSearch(e.target.value)} placeholder="Search…" className="text-xs rounded px-3 py-1.5 border outline-none w-36" style={{ background: '#1c2230', color: '#e8eaf0', borderColor: 'rgba(255,255,255,0.1)' }} />
-              <select value={clientTableFilter} onChange={(e) => setClientTableFilter(e.target.value)} className="text-xs rounded px-2 py-1.5 border" style={{ background: '#1c2230', color: '#e8eaf0', borderColor: 'rgba(255,255,255,0.1)' }}>
-                <option value="All">All clients</option>
-                {clients.slice(1).map((c) => <option key={c} value={c}>{c}</option>)}
-              </select>
               <div style={{ borderLeft: '1px solid rgba(255,255,255,0.1)', height: 16 }} />
               <span className="text-xs" style={{ color: '#8892a4' }}>Sort:</span>
               {(['severity', 'score'] as const).map((mode) => (
@@ -1137,135 +1105,92 @@ export default function ResultsTab({ studies, savedUpdates = [] }: { studies: St
             </div>
           </div>
 
-          {/* Unified client + study table */}
+          {/* Flat study table */}
           <div style={{ maxHeight: '560px', overflowY: 'auto' }}>
-            {groupedByClient.length === 0 ? (
+            {sortedStudies.length === 0 ? (
               <div className="px-4 py-8 text-center text-sm" style={{ color: '#8892a4' }}>No studies match the current filters.</div>
             ) : (
-              <table className="w-full text-xs" style={{ minWidth: 900, borderCollapse: 'collapse' }}>
+              <table className="w-full text-xs" style={{ minWidth: 1000, borderCollapse: 'collapse' }}>
                 <thead style={{ position: 'sticky', top: 0, zIndex: 2, background: '#1c2230' }}>
                   <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
-                    {['Study / Client', 'TA', 'Type', 'Risk', 'FPI', 'DBL', 'Wks to DBL', 'Prod %', 'QC %', 'QC Fail (n / %)', 'Sig. Delays'].map((h) => (
+                    {['Sponsor', 'Portfolio', 'Study', 'TA', 'Type', 'Risk', 'FPI', 'DBL', 'Wks to DBL', 'Prod %', 'QC %', 'QC Fail', 'Sig. Delays'].map((h) => (
                       <th key={h} className="text-left px-3 py-2 whitespace-nowrap" style={colStyle}>{h}</th>
                     ))}
                   </tr>
+                  {/* Inline column filters */}
+                  <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', background: '#161b24' }}>
+                    <th className="px-2 py-1">
+                      <select value={tableSponsorFilter} onChange={(e) => setTableSponsorFilter(e.target.value)} style={{ background: '#0d1117', color: '#e8eaf0', border: '1px solid rgba(255,255,255,0.08)', fontSize: 10, borderRadius: 3, width: '100%', padding: '2px 4px' }}>
+                        {clients.map((c) => <option key={c} value={c}>{c}</option>)}
+                      </select>
+                    </th>
+                    <th className="px-2 py-1">
+                      <select value={tablePortfolioFilter} onChange={(e) => setTablePortfolioFilter(e.target.value)} style={{ background: '#0d1117', color: '#e8eaf0', border: '1px solid rgba(255,255,255,0.08)', fontSize: 10, borderRadius: 3, width: '100%', padding: '2px 4px' }}>
+                        <option value="All">All</option>
+                        {portfolios.map((p) => <option key={p} value={p}>{p}</option>)}
+                      </select>
+                    </th>
+                    <th colSpan={11} />
+                  </tr>
                 </thead>
                 <tbody>
-                  {groupedByClient.map(({ client, studies: clientStudies }) => {
-                    const isExpanded = expandedClients.has(client);
-                    const riskCounts = clientStudies.reduce((acc, s) => { acc[effectiveTier(s, savedUpdates)] = (acc[effectiveTier(s, savedUpdates)] || 0) + 1; return acc; }, {} as Record<string, number>);
-                    const cAvgProd = clientStudies.reduce((a, s) => a + s.prod_pct, 0) / clientStudies.length;
-                    const cAvgQc = clientStudies.reduce((a, s) => a + s.qc_pct, 0) / clientStudies.length;
-                    const cTotalFail = clientStudies.reduce((a, s) => a + s.failed_qc, 0);
-                    const cTotalDel = clientStudies.reduce((a, s) => a + s.total_del, 0);
-                    const cFailPct = cTotalDel > 0 ? ((cTotalFail / cTotalDel) * 100).toFixed(1) : '0';
-                    const cSigDelays = clientStudies.reduce((a, s) => a + s.sig_delays, 0);
-
+                  {sortedStudies.map((study) => {
+                    const eTier = effectiveTier(study, savedUpdates);
+                    const bump = savedUpdates.find((u) => u.study === study.study)?.riskBump ?? 0;
+                    const ms = nextUpcomingMilestone(study, savedUpdates);
+                    const sFail = study.total_del > 0 ? ((study.failed_qc / study.total_del) * 100).toFixed(0) : '0';
+                    const wkColor = study.weeks_to_dbl !== null && study.weeks_to_dbl <= 4 ? '#ef4444' : study.weeks_to_dbl !== null && study.weeks_to_dbl <= 8 ? '#f97316' : '#8892a4';
+                    const isSelected = selectedStudy === study.study;
                     return (
                       <>
-                        {/* Client group header row */}
                         <tr
-                          key={`client-${client}`}
-                          className="cursor-pointer"
-                          onClick={() => toggleClient(client)}
-                          style={{ background: 'rgba(26,92,56,0.18)', borderBottom: '1px solid rgba(26,92,56,0.4)' }}
+                          key={study.study}
+                          className="hover:bg-white/[0.03] transition-colors cursor-pointer"
+                          style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', background: isSelected ? 'rgba(59,130,246,0.08)' : undefined }}
+                          onClick={() => { setSelectedStudy(isSelected ? null : study.study); if (isSelected) setGranularMode(false); }}
                         >
-                          <td className="px-3 py-2.5 font-semibold whitespace-nowrap" style={{ color: '#2ea55e', borderLeft: '3px solid #1a5c38' }}>
-                            <span className="mr-1.5 text-xs" style={{ color: '#2ea55e' }}>{isExpanded ? '▼' : '▶'}</span>
-                            {client}
-                            <span className="ml-2 text-xs font-normal" style={{ color: '#8892a4' }}>· {clientStudies.length} {clientStudies.length === 1 ? 'study' : 'studies'}</span>
+                          <td className="px-3 py-2 whitespace-nowrap" style={{ color: '#8892a4' }}>{study.client}</td>
+                          <td className="px-3 py-2 whitespace-nowrap" style={{ color: '#6b7280', maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis' }}>{study.portfolio}</td>
+                          <td className="px-3 py-2 font-medium whitespace-nowrap" style={{ color: isSelected ? '#93c5fd' : '#e8eaf0' }}>
+                            <span className="mr-1" style={{ color: '#8892a4' }}>{isSelected ? '▼' : '▶'}</span>
+                            {study.study}
+                            {ms && <span className="ml-2 text-xs" style={{ color: '#8892a4' }}>📅 {ms.date}</span>}
+                            {bump > 0 && <span className="ml-2 text-xs font-semibold" style={{ color: '#ef4444' }}>+{(bump * 100).toFixed(0)}%</span>}
                           </td>
-                          <td className="px-3 py-2.5" style={{ color: '#6b7280' }}>—</td>
-                          <td className="px-3 py-2.5" style={{ color: '#6b7280' }}>—</td>
-                          <td className="px-3 py-2.5">
-                            <div className="flex items-center gap-1">
-                              {(['Critical', 'High', 'Elevated', 'Moderate', 'Low'] as const).filter((t) => riskCounts[t]).map((tier) => (
-                                <span key={tier} className={`inline-flex items-center gap-0.5 text-xs px-1.5 py-0.5 rounded-full font-medium ${RISK_STYLES[tier]}`}>
-                                  {RISK_EMOJI[tier]} {riskCounts[tier]}
-                                </span>
-                              ))}
-                            </div>
+                          <td className="px-3 py-2 whitespace-nowrap" style={{ color: '#8892a4' }}>{study.ta}</td>
+                          <td className="px-3 py-2">
+                            <span className="px-1.5 py-0.5 rounded text-xs" style={{ background: study.fso_fsp === 'FSO' ? 'rgba(46,165,94,0.1)' : 'rgba(59,130,246,0.1)', color: study.fso_fsp === 'FSO' ? '#2ea55e' : '#3b82f6' }}>{study.fso_fsp}</span>
                           </td>
-                          <td className="px-3 py-2.5" style={{ color: '#6b7280' }}>—</td>
-                          <td className="px-3 py-2.5" style={{ color: '#6b7280' }}>—</td>
-                          <td className="px-3 py-2.5" style={{ color: '#6b7280' }}>—</td>
-                          <td className="px-3 py-2.5">
+                          <td className="px-3 py-2">
+                            <span className={`inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded-full ${RISK_STYLES[eTier]}`}>{RISK_EMOJI[eTier]} {eTier}</span>
+                          </td>
+                          <td className="px-3 py-2 whitespace-nowrap" style={{ color: '#8892a4' }}>{study.fpi ?? '—'}</td>
+                          <td className="px-3 py-2 whitespace-nowrap" style={{ color: '#8892a4' }}>{study.dbl ?? '—'}</td>
+                          <td className="px-3 py-2 font-medium whitespace-nowrap" style={{ color: wkColor }}>{study.weeks_to_dbl !== null ? study.weeks_to_dbl.toFixed(1) : '—'}</td>
+                          <td className="px-3 py-2">
                             <div className="flex items-center gap-1.5">
-                              <div className="h-1.5 w-14 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.08)' }}><div className="h-full rounded-full" style={{ width: `${cAvgProd}%`, background: '#2ea55e' }} /></div>
-                              <span className="font-medium" style={{ color: cAvgProd >= 80 ? '#2ea55e' : cAvgProd >= 40 ? '#d97706' : '#e8eaf0' }}>{cAvgProd.toFixed(1)}%</span>
+                              <div className="h-1.5 w-14 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.08)' }}><div className="h-full rounded-full" style={{ width: `${study.prod_pct}%`, background: '#2ea55e' }} /></div>
+                              <span style={{ color: study.prod_pct >= 80 ? '#2ea55e' : study.prod_pct >= 40 ? '#d97706' : '#e8eaf0' }}>{study.prod_pct.toFixed(0)}%</span>
                             </div>
                           </td>
-                          <td className="px-3 py-2.5">
+                          <td className="px-3 py-2">
                             <div className="flex items-center gap-1.5">
-                              <div className="h-1.5 w-14 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.08)' }}><div className="h-full rounded-full" style={{ width: `${cAvgQc}%`, background: '#3b82f6' }} /></div>
-                              <span className="font-medium" style={{ color: cAvgQc >= 80 ? '#2ea55e' : cAvgQc >= 40 ? '#d97706' : '#e8eaf0' }}>{cAvgQc.toFixed(1)}%</span>
+                              <div className="h-1.5 w-14 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.08)' }}><div className="h-full rounded-full" style={{ width: `${study.qc_pct}%`, background: '#3b82f6' }} /></div>
+                              <span style={{ color: study.qc_pct >= 80 ? '#2ea55e' : study.qc_pct >= 40 ? '#d97706' : '#e8eaf0' }}>{study.qc_pct.toFixed(0)}%</span>
                             </div>
                           </td>
-                          <td className="px-3 py-2.5 font-medium" style={{ color: cTotalFail > 0 ? '#ef4444' : '#2ea55e' }}>
-                            {cTotalFail > 0 ? `${cTotalFail} (${cFailPct}%)` : '0 ✓'}
+                          <td className="px-3 py-2 font-medium" style={{ color: study.failed_qc > 0 ? '#ef4444' : '#2ea55e' }}>
+                            {study.failed_qc > 0 ? `${study.failed_qc} (${sFail}%)` : '0 ✓'}
                           </td>
-                          <td className="px-3 py-2.5 font-medium" style={{ color: cSigDelays > 0 ? '#f97316' : '#6b7280' }}>{cSigDelays || '—'}</td>
+                          <td className="px-3 py-2" style={{ color: study.sig_delays > 0 ? '#f97316' : '#8892a4' }}>{study.sig_delays}</td>
                         </tr>
-
-                        {/* Study rows (when expanded) */}
-                        {isExpanded && clientStudies.map((study) => {
-                          const eTier = effectiveTier(study, savedUpdates);
-                          const bump = savedUpdates.find((u) => u.study === study.study)?.riskBump ?? 0;
-                          const ms = nextUpcomingMilestone(study, savedUpdates);
-                          const sFail = study.total_del > 0 ? ((study.failed_qc / study.total_del) * 100).toFixed(0) : '0';
-                          const wkColor = study.weeks_to_dbl !== null && study.weeks_to_dbl <= 4 ? '#ef4444' : study.weeks_to_dbl !== null && study.weeks_to_dbl <= 8 ? '#f97316' : '#8892a4';
-                          const isSelected = selectedStudy === study.study;
-                          return (
-                            <>
-                              <tr
-                                key={study.study}
-                                className="hover:bg-white/[0.03] transition-colors cursor-pointer"
-                                style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', background: isSelected ? 'rgba(59,130,246,0.08)' : undefined }}
-                                onClick={() => { setSelectedStudy(isSelected ? null : study.study); if (isSelected) setGranularMode(false); }}
-                              >
-                                <td className="px-3 py-2 font-medium whitespace-nowrap" style={{ color: isSelected ? '#93c5fd' : '#e8eaf0', borderLeft: '3px solid transparent', paddingLeft: '2rem' }}>
-                                  <span className="mr-1" style={{ color: '#8892a4' }}>{isSelected ? '▼' : '▶'}</span>
-                                  {study.study}
-                                  {ms && <span className="ml-2 text-xs" style={{ color: '#8892a4' }}>📅 {ms.date}</span>}
-                                  {bump > 0 && <span className="ml-2 text-xs font-semibold" style={{ color: '#ef4444' }}>+{(bump * 100).toFixed(0)}%</span>}
-                                </td>
-                                <td className="px-3 py-2 whitespace-nowrap" style={{ color: '#8892a4' }}>{study.ta}</td>
-                                <td className="px-3 py-2">
-                                  <span className="px-1.5 py-0.5 rounded text-xs" style={{ background: study.fso_fsp === 'FSO' ? 'rgba(46,165,94,0.1)' : 'rgba(59,130,246,0.1)', color: study.fso_fsp === 'FSO' ? '#2ea55e' : '#3b82f6' }}>{study.fso_fsp}</span>
-                                </td>
-                                <td className="px-3 py-2">
-                                  <span className={`inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded-full ${RISK_STYLES[eTier]}`}>{RISK_EMOJI[eTier]} {eTier}</span>
-                                </td>
-                                <td className="px-3 py-2 whitespace-nowrap" style={{ color: '#8892a4' }}>{study.fpi ?? '—'}</td>
-                                <td className="px-3 py-2 whitespace-nowrap" style={{ color: '#8892a4' }}>{study.dbl ?? '—'}</td>
-                                <td className="px-3 py-2 font-medium whitespace-nowrap" style={{ color: wkColor }}>{study.weeks_to_dbl !== null ? study.weeks_to_dbl.toFixed(1) : '—'}</td>
-                                <td className="px-3 py-2">
-                                  <div className="flex items-center gap-1.5">
-                                    <div className="h-1.5 w-14 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.08)' }}><div className="h-full rounded-full" style={{ width: `${study.prod_pct}%`, background: '#2ea55e' }} /></div>
-                                    <span style={{ color: study.prod_pct >= 80 ? '#2ea55e' : study.prod_pct >= 40 ? '#d97706' : '#e8eaf0' }}>{study.prod_pct.toFixed(0)}%</span>
-                                  </div>
-                                </td>
-                                <td className="px-3 py-2">
-                                  <div className="flex items-center gap-1.5">
-                                    <div className="h-1.5 w-14 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.08)' }}><div className="h-full rounded-full" style={{ width: `${study.qc_pct}%`, background: '#3b82f6' }} /></div>
-                                    <span style={{ color: study.qc_pct >= 80 ? '#2ea55e' : study.qc_pct >= 40 ? '#d97706' : '#e8eaf0' }}>{study.qc_pct.toFixed(0)}%</span>
-                                  </div>
-                                </td>
-                                <td className="px-3 py-2 font-medium" style={{ color: study.failed_qc > 0 ? '#ef4444' : '#2ea55e' }}>
-                                  {study.failed_qc > 0 ? `${study.failed_qc} (${sFail}%)` : '0 ✓'}
-                                </td>
-                                <td className="px-3 py-2" style={{ color: study.sig_delays > 0 ? '#f97316' : '#8892a4' }}>{study.sig_delays}</td>
-                              </tr>
-                              {isSelected && (
-                                <tr key={`${study.study}-drilldown`}>
-                                  <td colSpan={11} style={{ padding: 0 }}>
-                                    <DrillDown study={study} onClose={() => { setSelectedStudy(null); setGranularMode(false); }} effectiveTier={eTier} riskBump={bump} />
-                                  </td>
-                                </tr>
-                              )}
-                            </>
-                          );
-                        })}
+                        {isSelected && (
+                          <tr key={`${study.study}-drilldown`}>
+                            <td colSpan={13} style={{ padding: 0 }}>
+                              <DrillDown study={study} onClose={() => { setSelectedStudy(null); setGranularMode(false); }} effectiveTier={eTier} riskBump={bump} />
+                            </td>
+                          </tr>
+                        )}
                       </>
                     );
                   })}
@@ -1282,13 +1207,7 @@ export default function ResultsTab({ studies, savedUpdates = [] }: { studies: St
           filterStudy={selectedStudy}
           granularMode={granularMode}
           onGranularToggle={() => setGranularMode((g) => !g)}
-          onClear={
-            selectedStudy
-              ? () => { setSelectedStudy(null); setGranularMode(false); }
-              : expandedClients.size > 0
-              ? () => setExpandedClients(new Set())
-              : undefined
-          }
+          onClear={selectedStudy ? () => { setSelectedStudy(null); setGranularMode(false); } : undefined}
         />
       </main>
     </div>
