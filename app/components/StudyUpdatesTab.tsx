@@ -348,7 +348,7 @@ export default function StudyUpdatesTab({ studies, onSave, savedUpdates }: Props
                 {([
                   ['protocol_plan_no', 'Protocol / CIP No.'],
                   ['sponsor', 'Sponsor'],
-                  ['fortrea_study_id', 'Fortrea Study ID'],
+                  ['fortrea_study_id', 'Internal Study ID'],
                   ['timesheet_billing_code', 'Timesheet Billing Code'],
                   ['lead_statistician', 'Lead Statistician'],
                   ['lead_programmer', 'Lead Programmer'],

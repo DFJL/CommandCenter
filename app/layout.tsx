@@ -3,7 +3,7 @@ import './globals.css';
 
 export const metadata: Metadata = {
   title: 'Clinical Delivery Command Center',
-  description: 'Fortrea Biometrics — Pharma Study Portfolio Tracker',
+  description: 'Clinical Delivery Command Center — Pharma Study Portfolio Tracker',
 };
 
 export default function RootLayout({
@@ -28,7 +28,7 @@ export default function RootLayout({
             className="text-sm font-medium"
             style={{ color: 'rgba(255,255,255,0.75)' }}
           >
-            Fortrea Biometrics · LATAM Hackathon 2026
+            Biometrics · LATAM 2026
           </div>
         </nav>
         <main>{children}</main>

@@ -1,7 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { NextRequest } from 'next/server';
 
-const SYSTEM_PROMPT = `You are a clinical trial portfolio assistant for Fortrea Biometrics with tool capabilities.
+const SYSTEM_PROMPT = `You are a clinical trial portfolio assistant with tool capabilities.
 
 Use tools proactively:
 - filter_app  → when user wants to see/filter/show specific studies in the main table
