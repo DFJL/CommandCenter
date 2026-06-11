@@ -1,17 +1,25 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { NextRequest } from 'next/server';
 
-const SYSTEM_PROMPT = `You are a clinical trial portfolio assistant with tool capabilities.
+const SYSTEM_PROMPT = `You are a clinical trial portfolio assistant. You have three distinct tools — choose carefully:
 
-Use tools proactively:
-- filter_app  → when user wants to see/filter/show specific studies in the main table
-- show_chart  → when user wants to compare, visualize, or chart a metric
-- show_table  → when user wants a ranked list or focused table of studies
+TOOL SELECTION RULES (follow exactly):
+1. filter_app   → ONLY when user says "filter", "hide", "show only", or asks to narrow the visible rows by a category (risk tier, client, FSO/FSP). Does NOT produce charts or data tables.
+2. show_chart   → whenever user asks to "compare", "chart", "graph", "visualize", "plot", "by client/TA/type", or wants to see a metric across groups.
+3. show_table   → whenever user asks to "list", "rank", "top N", "worst", "best", "give me a table", or wants data rows with multiple columns.
+
+EXAMPLES:
+- "show high-risk studies"           → filter_app (risk_tier: High)
+- "show only FSP studies"            → filter_app (fso_fsp: FSP)
+- "compare QC % by client"           → show_chart (metric: qc_pct, group_by: client)
+- "which TA has the most delays?"    → show_chart (metric: sig_delays, group_by: ta)
+- "list the 5 worst studies by QC"   → show_table (sort_by: qc_pct, sort_order: asc, limit: 5)
+- "top 10 studies by production"     → show_table (sort_by: prod_pct, sort_order: desc, limit: 10)
+- "chart production % by risk tier"  → show_chart (metric: prod_pct, group_by: risk_tier)
 
 Rules:
-- Always prefer a tool over a plain text list when the request is visual or comparative.
-- Keep the text response to 1-2 sentences (the tool output speaks for itself).
-- Never ask for clarification on straightforward requests — just act.
+- Always use a tool. Never reply with a plain text list when a tool applies.
+- Keep prose to 1-2 sentences — the tool output speaks for itself.
 - Be specific with numbers from the context.`;
 
 interface StudyRow {
@@ -33,7 +41,7 @@ const METRIC_LABEL: Record<string, string> = {
 const tools: Anthropic.Tool[] = [
   {
     name: 'filter_app',
-    description: 'Filter the portfolio table to show studies matching the criteria. Use when user wants to see/show/filter specific studies.',
+    description: 'Apply row filters to the main portfolio table (narrows which rows are visible). Use ONLY for filter/show-only/hide requests by category. Do NOT use for charts, rankings, or data tables.',
     input_schema: {
       type: 'object' as const,
       properties: {
@@ -46,7 +54,7 @@ const tools: Anthropic.Tool[] = [
   },
   {
     name: 'show_chart',
-    description: 'Create a bar chart comparing a metric across a grouping. Use for compare/visualize/chart requests.',
+    description: 'Render an inline bar chart comparing a metric (prod_pct, qc_pct, sig_delays, failed_qc) grouped by a dimension. Use for compare/visualize/chart/graph/plot/by-client/by-TA requests.',
     input_schema: {
       type: 'object' as const,
       required: ['title','metric','group_by'],
@@ -60,7 +68,7 @@ const tools: Anthropic.Tool[] = [
   },
   {
     name: 'show_table',
-    description: 'Show a focused, sortable table of studies. Use when listing, ranking, or spotlighting a subset.',
+    description: 'Render an inline data table of studies with multiple columns. Use for list/rank/top-N/worst/best/give-me-a-table requests.',
     input_schema: {
       type: 'object' as const,
       required: ['title'],
