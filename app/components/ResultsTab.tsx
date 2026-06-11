@@ -727,7 +727,6 @@ export default function ResultsTab({ studies, savedUpdates = [] }: { studies: St
   const [fsoFspFilter, setFsoFspFilter] = useState<'All' | 'FSO' | 'FSP'>('All');
   const [riskFilter, setRiskFilter] = useState<string>('All');
   const [downloadToast, setDownloadToast] = useState(false);
-  const [showAiQuery, setShowAiQuery] = useState(false);
 
   const clients = useMemo(
     () => ['All', ...Array.from(new Set(studies.map((s) => s.client))).sort()],
@@ -966,73 +965,60 @@ export default function ResultsTab({ studies, savedUpdates = [] }: { studies: St
           </div>
         </div>
 
-        {/* AI Query — collapsed by default */}
+        {/* AI Query */}
         <div className="rounded-lg" style={{ background: '#161b24', border: '1px solid rgba(255,255,255,0.07)' }}>
-          <button
-            className="w-full flex items-center justify-between px-4 py-2.5"
-            onClick={() => setShowAiQuery((v) => !v)}
-            style={{ color: '#8892a4' }}
-          >
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-semibold uppercase tracking-wider">AI Query</span>
-              {chatHistory.length > 0 && <span className="text-xs px-1.5 py-0.5 rounded-full" style={{ background: 'rgba(46,165,94,0.15)', color: '#2ea55e' }}>{chatHistory.filter(m => m.role === 'user').length} messages</span>}
-            </div>
-            <span className="text-xs">{showAiQuery ? '▲ Hide' : '▼ Show'}</span>
-          </button>
-          {showAiQuery && (
-            <>
-              {chatHistory.length > 0 && (
-                <div className="px-4 pb-2 space-y-2 max-h-80 overflow-y-auto" style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}>
-                  <div className="pt-2" />
-                  {chatHistory.map((msg, i) => (
-                    <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                      <div className="text-xs px-3 py-2 rounded-lg max-w-[92%]" style={msg.role === 'user' ? { background: 'rgba(46,165,94,0.15)', color: '#e8eaf0', border: '1px solid rgba(46,165,94,0.25)' } : { background: 'rgba(59,130,246,0.08)', color: '#93c5fd', border: '1px solid rgba(59,130,246,0.2)' }}>
-                        {msg.content}
-                        {msg.role === 'assistant' && i === chatHistory.length - 1 && nlqActive && !msg.action && (
-                          <span className="ml-2 text-xs" style={{ color: '#8892a4' }}>· {tableFiltered.length} studies shown</span>
-                        )}
-                        {msg.role === 'assistant' && msg.action?.type === 'filter' && (
-                          <div className="mt-1.5 inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded" style={{ background: 'rgba(46,165,94,0.15)', color: '#2ea55e', border: '1px solid rgba(46,165,94,0.3)' }}>
-                            ✓ Filters applied · {tableFiltered.length} studies shown
-                          </div>
-                        )}
-                        {msg.role === 'assistant' && msg.action?.type === 'chart' && (
-                          <InlineChart title={msg.action.title} metric={msg.action.metric} metricLabel={msg.action.metricLabel} data={msg.action.data} />
-                        )}
-                        {msg.role === 'assistant' && msg.action?.type === 'table' && (
-                          <InlineTable title={msg.action.title} columns={msg.action.columns} rows={msg.action.rows} />
-                        )}
+          <div className="px-4 pt-3 pb-2 flex items-center justify-between">
+            <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: '#8892a4' }}>AI Query</p>
+            {chatHistory.length > 0 && <button onClick={clearNlq} className="text-xs px-2 py-0.5 rounded" style={{ color: '#8892a4', background: 'rgba(255,255,255,0.05)' }}>Clear chat</button>}
+          </div>
+          {chatHistory.length > 0 && (
+            <div className="px-4 pb-2 space-y-2 max-h-80 overflow-y-auto">
+              {chatHistory.map((msg, i) => (
+                <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                  <div className="text-xs px-3 py-2 rounded-lg max-w-[92%]" style={msg.role === 'user' ? { background: 'rgba(46,165,94,0.15)', color: '#e8eaf0', border: '1px solid rgba(46,165,94,0.25)' } : { background: 'rgba(59,130,246,0.08)', color: '#93c5fd', border: '1px solid rgba(59,130,246,0.2)' }}>
+                    {msg.content}
+                    {msg.role === 'assistant' && i === chatHistory.length - 1 && nlqActive && !msg.action && (
+                      <span className="ml-2 text-xs" style={{ color: '#8892a4' }}>· {tableFiltered.length} studies shown</span>
+                    )}
+                    {msg.role === 'assistant' && msg.action?.type === 'filter' && (
+                      <div className="mt-1.5 inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded" style={{ background: 'rgba(46,165,94,0.15)', color: '#2ea55e', border: '1px solid rgba(46,165,94,0.3)' }}>
+                        ✓ Filters applied · {tableFiltered.length} studies shown
                       </div>
-                    </div>
-                  ))}
-                  {nlqLoading && (
-                    <div className="flex justify-start">
-                      <div className="text-xs px-3 py-2 rounded-lg flex items-center gap-2" style={{ background: 'rgba(59,130,246,0.08)', color: '#93c5fd', border: '1px solid rgba(59,130,246,0.2)' }}>
-                        <div className="w-3 h-3 border border-t-transparent rounded-full animate-spin" style={{ borderColor: '#3b82f6', borderTopColor: 'transparent' }} />
-                        Analyzing…
-                      </div>
-                    </div>
-                  )}
+                    )}
+                    {msg.role === 'assistant' && msg.action?.type === 'chart' && (
+                      <InlineChart title={msg.action.title} metric={msg.action.metric} metricLabel={msg.action.metricLabel} data={msg.action.data} />
+                    )}
+                    {msg.role === 'assistant' && msg.action?.type === 'table' && (
+                      <InlineTable title={msg.action.title} columns={msg.action.columns} rows={msg.action.rows} />
+                    )}
+                  </div>
+                </div>
+              ))}
+              {nlqLoading && (
+                <div className="flex justify-start">
+                  <div className="text-xs px-3 py-2 rounded-lg flex items-center gap-2" style={{ background: 'rgba(59,130,246,0.08)', color: '#93c5fd', border: '1px solid rgba(59,130,246,0.2)' }}>
+                    <div className="w-3 h-3 border border-t-transparent rounded-full animate-spin" style={{ borderColor: '#3b82f6', borderTopColor: 'transparent' }} />
+                    Analyzing…
+                  </div>
                 </div>
               )}
-              <div className="px-4 pb-3 pt-2" style={{ borderTop: chatHistory.length === 0 ? '1px solid rgba(255,255,255,0.05)' : undefined }}>
-                <div className="flex gap-2 mb-2">
-                  <input type="text" value={nlqInput} onChange={(e) => setNlqInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleNlq()} placeholder={chatHistory.length > 0 ? 'Continue the conversation…' : 'Ask about your portfolio…'} className="flex-1 text-sm rounded px-3 py-2 border outline-none" style={{ background: '#1c2230', color: '#e8eaf0', borderColor: 'rgba(255,255,255,0.1)' }} />
-                  <button onClick={() => handleNlq()} disabled={nlqLoading} className="px-4 py-2 rounded text-sm font-medium" style={{ background: '#2ea55e', color: '#fff', opacity: nlqLoading ? 0.6 : 1 }}>
-                    {nlqLoading ? '…' : chatHistory.length > 0 ? 'Send' : 'Ask'}
-                  </button>
-                  {chatHistory.length > 0 && <button onClick={clearNlq} className="text-xs px-2 py-1 rounded" style={{ color: '#8892a4', background: 'rgba(255,255,255,0.05)' }}>Clear</button>}
-                </div>
-                {chatHistory.length === 0 && (
-                  <div className="flex flex-wrap gap-2">
-                    {QUICK_CHIPS.map((chip) => (
-                      <button key={chip} onClick={() => { setNlqInput(chip); handleNlq(chip); }} className="text-xs px-3 py-1 rounded-full border" style={{ borderColor: 'rgba(46,165,94,0.4)', color: '#2ea55e', background: 'rgba(46,165,94,0.08)' }}>{chip}</button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </>
+            </div>
           )}
+          <div className="px-4 pb-3">
+            <div className="flex gap-2 mb-2">
+              <input type="text" value={nlqInput} onChange={(e) => setNlqInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleNlq()} placeholder={chatHistory.length > 0 ? 'Continue the conversation…' : 'Ask about your portfolio…'} className="flex-1 text-sm rounded px-3 py-2 border outline-none" style={{ background: '#1c2230', color: '#e8eaf0', borderColor: 'rgba(255,255,255,0.1)' }} />
+              <button onClick={() => handleNlq()} disabled={nlqLoading} className="px-4 py-2 rounded text-sm font-medium" style={{ background: '#2ea55e', color: '#fff', opacity: nlqLoading ? 0.6 : 1 }}>
+                {nlqLoading ? '…' : chatHistory.length > 0 ? 'Send' : 'Ask'}
+              </button>
+            </div>
+            {chatHistory.length === 0 && (
+              <div className="flex flex-wrap gap-2">
+                {QUICK_CHIPS.map((chip) => (
+                  <button key={chip} onClick={() => { setNlqInput(chip); handleNlq(chip); }} className="text-xs px-3 py-1 rounded-full border" style={{ borderColor: 'rgba(46,165,94,0.4)', color: '#2ea55e', background: 'rgba(46,165,94,0.08)' }}>{chip}</button>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Completion Over Time — responds to filters */}

@@ -128,72 +128,77 @@ export async function POST(req: NextRequest) {
 
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
-    return Response.json({ response: patternMatch(query, context), action: null });
+    return Response.json({ response: patternMatch(query, context), action: execPatternAction(query) });
   }
 
-  const ai = new Anthropic({ apiKey });
-  const contextNote = `Portfolio snapshot:\n${context}`;
+  try {
+    const ai = new Anthropic({ apiKey });
+    const contextNote = `Portfolio snapshot:\n${context}`;
 
-  const messages: Anthropic.MessageParam[] = [];
-  if (history.length > 0) {
-    messages.push({ role: 'user', content: `${contextNote}\n\n${history[0].content}` });
-    for (let i = 1; i < history.length; i++) {
-      messages.push({ role: history[i].role as 'user' | 'assistant', content: history[i].content });
-    }
-    messages.push({ role: 'user', content: query });
-  } else {
-    messages.push({ role: 'user', content: `${contextNote}\n\n${query}` });
-  }
-
-  const resp = await ai.messages.create({
-    model: 'claude-haiku-4-5-20251001',
-    max_tokens: 600,
-    system: SYSTEM_PROMPT,
-    tools,
-    messages,
-  });
-
-  if (resp.stop_reason === 'tool_use') {
-    const tu = resp.content.find((b): b is Anthropic.ToolUseBlock => b.type === 'tool_use');
-    if (!tu) return Response.json({ response: 'Tool call failed.', action: null });
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const input = tu.input as any;
-    let action: ReturnType<typeof execFilter> | ReturnType<typeof execChart> | ReturnType<typeof execTable> | null = null;
-    let toolResult: string;
-
-    if (tu.name === 'filter_app') {
-      action = execFilter(input as FilterInput);
-      toolResult = `Filter applied: risk=${input.risk_tier ?? 'All'}, type=${input.fso_fsp ?? 'All'}, client=${input.client ?? 'All'}, search="${input.search ?? ''}"`;
-    } else if (tu.name === 'show_chart') {
-      action = execChart(input as ChartInput, studies);
-      toolResult = `Chart "${action.title}" created — ${(action as ReturnType<typeof execChart>).data.length} data points`;
-    } else if (tu.name === 'show_table') {
-      action = execTable(input as TableInput, studies);
-      toolResult = `Table "${action.title}" — ${(action as ReturnType<typeof execTable>).rows.length} studies`;
+    const messages: Anthropic.MessageParam[] = [];
+    if (history.length > 0) {
+      messages.push({ role: 'user', content: `${contextNote}\n\n${history[0].content}` });
+      for (let i = 1; i < history.length; i++) {
+        messages.push({ role: history[i].role as 'user' | 'assistant', content: history[i].content });
+      }
+      messages.push({ role: 'user', content: query });
     } else {
-      toolResult = 'Tool executed.';
+      messages.push({ role: 'user', content: `${contextNote}\n\n${query}` });
     }
 
-    // Second turn: get natural language commentary
-    const followUp = await ai.messages.create({
+    const resp = await ai.messages.create({
       model: 'claude-haiku-4-5-20251001',
-      max_tokens: 200,
+      max_tokens: 600,
       system: SYSTEM_PROMPT,
       tools,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      messages: [...messages, { role: 'assistant', content: resp.content as any }, {
-        role: 'user',
-        content: [{ type: 'tool_result' as const, tool_use_id: tu.id, content: toolResult }],
-      }],
+      messages,
     });
 
-    const txt = followUp.content.find((b): b is Anthropic.TextBlock => b.type === 'text');
-    return Response.json({ response: txt?.text ?? 'Done.', action });
-  }
+    if (resp.stop_reason === 'tool_use') {
+      const tu = resp.content.find((b): b is Anthropic.ToolUseBlock => b.type === 'tool_use');
+      if (!tu) return Response.json({ response: 'Tool call failed.', action: null });
 
-  const txt = resp.content.find((b): b is Anthropic.TextBlock => b.type === 'text');
-  return Response.json({ response: txt?.text ?? 'No response.', action: null });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const input = tu.input as any;
+      let action: ReturnType<typeof execFilter> | ReturnType<typeof execChart> | ReturnType<typeof execTable> | null = null;
+      let toolResult: string;
+
+      if (tu.name === 'filter_app') {
+        action = execFilter(input as FilterInput);
+        toolResult = `Filter applied: risk=${input.risk_tier ?? 'All'}, type=${input.fso_fsp ?? 'All'}, client=${input.client ?? 'All'}, search="${input.search ?? ''}"`;
+      } else if (tu.name === 'show_chart') {
+        action = execChart(input as ChartInput, studies);
+        toolResult = `Chart "${action.title}" created — ${(action as ReturnType<typeof execChart>).data.length} data points`;
+      } else if (tu.name === 'show_table') {
+        action = execTable(input as TableInput, studies);
+        toolResult = `Table "${action.title}" — ${(action as ReturnType<typeof execTable>).rows.length} studies`;
+      } else {
+        toolResult = 'Tool executed.';
+      }
+
+      // Second turn: get natural language commentary
+      const followUp = await ai.messages.create({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 200,
+        system: SYSTEM_PROMPT,
+        tools,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        messages: [...messages, { role: 'assistant', content: resp.content as any }, {
+          role: 'user',
+          content: [{ type: 'tool_result' as const, tool_use_id: tu.id, content: toolResult }],
+        }],
+      });
+
+      const txt = followUp.content.find((b): b is Anthropic.TextBlock => b.type === 'text');
+      return Response.json({ response: txt?.text ?? 'Done.', action });
+    }
+
+    const txt = resp.content.find((b): b is Anthropic.TextBlock => b.type === 'text');
+    return Response.json({ response: txt?.text ?? 'No response.', action: null });
+  } catch (err) {
+    console.error('[nlq] error:', err);
+    return Response.json({ response: patternMatch(query, context), action: execPatternAction(query) });
+  }
 }
 
 function patternMatch(query: string, _context: string): string {
@@ -202,5 +207,17 @@ function patternMatch(query: string, _context: string): string {
   if (/delayed|overdue/.test(q)) return 'Showing delayed studies.';
   if (/qc.below|qc under/.test(q)) { const m = q.match(/\d+/); return `Showing studies with QC below ${m?.[0] ?? 70}%.`; }
   if (/4 week|dbl/.test(q)) return 'Showing studies within 4 weeks of DBL.';
+  if (/fsp/.test(q)) return 'Showing FSP studies.';
+  if (/fso/.test(q)) return 'Showing FSO studies.';
   return `Searching for: "${query}"`;
+}
+
+function execPatternAction(query: string): ReturnType<typeof execFilter> | null {
+  const q = query.toLowerCase();
+  if (/critical/.test(q)) return execFilter({ risk_tier: 'Critical' });
+  if (/high.risk/.test(q)) return execFilter({ risk_tier: 'High' });
+  if (/delayed|overdue/.test(q)) return execFilter({ search: 'delayed' });
+  if (/fsp/.test(q)) return execFilter({ fso_fsp: 'FSP' });
+  if (/fso/.test(q)) return execFilter({ fso_fsp: 'FSO' });
+  return null;
 }
