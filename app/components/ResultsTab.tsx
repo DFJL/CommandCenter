@@ -767,6 +767,9 @@ export default function ResultsTab({ studies, savedUpdates = [] }: { studies: St
   const [fsoFspFilter, setFsoFspFilter] = useState<'All' | 'FSO' | 'FSP'>('All');
   const [riskFilter, setRiskFilter] = useState<string>('All');
   const [downloadToast, setDownloadToast] = useState(false);
+  const [groupBy, setGroupBy] = useState<'client' | 'portfolio' | 'fso_fsp'>('client');
+  const [showTrend, setShowTrend] = useState(false);
+  const [showAllGroups, setShowAllGroups] = useState(false);
 
   const clients = useMemo(
     () => ['All', ...Array.from(new Set(studies.map((s) => s.client))).sort()],
@@ -816,6 +819,25 @@ export default function ResultsTab({ studies, savedUpdates = [] }: { studies: St
       ? RISK_ORDER[effectiveTier(a, savedUpdates)] - RISK_ORDER[effectiveTier(b, savedUpdates)]
       : effectiveScore(b, savedUpdates) - effectiveScore(a, savedUpdates)
   ), [tableFiltered, sortMode, savedUpdates]);
+
+  const groupedCards = useMemo(() => {
+    const map: Record<string, Study[]> = {};
+    tableFiltered.forEach((s) => {
+      const key = String(s[groupBy] ?? 'Unknown');
+      (map[key] = map[key] || []).push(s);
+    });
+    return Object.entries(map).map(([key, grp]) => {
+      const avgProd = grp.reduce((a, s) => a + s.prod_pct, 0) / grp.length;
+      const avgQc   = grp.reduce((a, s) => a + s.qc_pct,   0) / grp.length;
+      const critical  = grp.filter((s) => effectiveTier(s, savedUpdates) === 'Critical').length;
+      const high      = grp.filter((s) => effectiveTier(s, savedUpdates) === 'High').length;
+      const elevated  = grp.filter((s) => effectiveTier(s, savedUpdates) === 'Elevated').length;
+      const sigDelays = grp.reduce((a, s) => a + s.sig_delays, 0);
+      const failedQc  = grp.reduce((a, s) => a + s.failed_qc, 0);
+      const worstScore = Math.max(...grp.map((s) => effectiveScore(s, savedUpdates)));
+      return { key, count: grp.length, avgProd, avgQc, critical, high, elevated, sigDelays, failedQc, worstScore };
+    }).sort((a, b) => b.worstScore - a.worstScore);
+  }, [tableFiltered, groupBy, savedUpdates]);
 
   const delayed = sidebarFiltered.filter((s) => s.delayed).length;
   const atRisk = sidebarFiltered.filter((s) => s.at_risk).length;
@@ -1061,36 +1083,94 @@ export default function ResultsTab({ studies, savedUpdates = [] }: { studies: St
           </div>
         </div>
 
-        {/* Completion Over Time — responds to filters */}
-        <div className="rounded-lg p-4" style={{ background: '#161b24', border: '1px solid rgba(255,255,255,0.07)' }}>
-          <div className="flex items-center justify-between mb-3">
-            <div>
-              <p className="text-sm font-semibold" style={{ color: '#e8eaf0' }}>
-                Delivery Trend
-                {chartLabel && (
-                  <span className="ml-2 text-xs font-normal" style={{ color: '#2ea55e' }}>— {chartLabel}</span>
-                )}
-                {(fsoFspFilter !== 'All' || nlqActive || riskFilter !== 'All' || !!tableSearch || tableSponsorFilter !== 'All' || tablePortfolioFilter !== 'All') && (
-                  <span className="ml-2 text-xs font-normal" style={{ color: '#3b82f6' }}>· filtered</span>
-                )}
-              </p>
-              <p className="text-xs" style={{ color: '#8892a4' }}>
-                {chartStudies.length} {chartStudies.length === 1 ? 'study' : 'studies'} · Prod {chartAvgProd.toFixed(1)}% · QC {chartAvgQc.toFixed(1)}%
-              </p>
+        {/* Group metric cards */}
+        <div className="rounded-lg overflow-hidden" style={{ background: '#161b24', border: '1px solid rgba(255,255,255,0.07)' }}>
+          {/* Header */}
+          <div className="flex items-center justify-between px-4 py-2.5" style={{ borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
+            <div className="flex items-center gap-3">
+              <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: '#8892a4' }}>Group by</span>
+              {([['client','Sponsor'],['portfolio','Portfolio'],['fso_fsp','Type']] as const).map(([val, label]) => (
+                <button key={val} onClick={() => { setGroupBy(val); setShowAllGroups(false); }}
+                  className="text-xs px-2.5 py-1 rounded font-medium"
+                  style={{ background: groupBy === val ? 'rgba(46,165,94,0.15)' : 'rgba(255,255,255,0.05)', color: groupBy === val ? '#2ea55e' : '#8892a4', border: groupBy === val ? '1px solid rgba(46,165,94,0.3)' : '1px solid transparent' }}>
+                  {label}
+                </button>
+              ))}
+              <span className="text-xs" style={{ color: '#4b5563' }}>· {groupedCards.length} groups · {tableFiltered.length} studies</span>
             </div>
-            <span className="text-xs" style={{ color: '#8892a4' }}>{SNAPSHOT_DATES.length} Snapshot dates ▼</span>
+            <button onClick={() => setShowTrend((v) => !v)} className="flex items-center gap-1.5 text-xs px-2.5 py-1 rounded" style={{ background: showTrend ? 'rgba(59,130,246,0.1)' : 'rgba(255,255,255,0.05)', color: showTrend ? '#3b82f6' : '#8892a4', border: showTrend ? '1px solid rgba(59,130,246,0.25)' : '1px solid transparent' }}>
+              📈 Delivery Trend {showTrend ? '▲' : '▼'}
+            </button>
           </div>
-          <ResponsiveContainer width="100%" height={190}>
-            <LineChart data={trendData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
-              <XAxis dataKey="date" tick={{ fill: '#8892a4', fontSize: 11 }} axisLine={{ stroke: 'rgba(255,255,255,0.1)' }} tickLine={false} />
-              <YAxis domain={['auto', 'auto']} tick={{ fill: '#8892a4', fontSize: 11 }} axisLine={{ stroke: 'rgba(255,255,255,0.1)' }} tickLine={false} tickFormatter={(v) => `${v}%`} />
-              <Tooltip contentStyle={{ background: '#1c2230', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 6 }} labelStyle={{ color: '#e8eaf0', marginBottom: 4 }} itemStyle={{ color: '#8892a4' }} formatter={(value) => [`${value}%`]} />
-              <Legend wrapperStyle={{ color: '#8892a4', fontSize: 12, paddingTop: 8 }} />
-              <Line type="monotone" dataKey="prod_pct" name="Production" stroke="#2ea55e" strokeWidth={2} dot={{ fill: '#2ea55e', r: 3 }} activeDot={{ r: 5 }} />
-              <Line type="monotone" dataKey="qc_pct" name="QC" stroke="#3b82f6" strokeWidth={2} dot={{ fill: '#3b82f6', r: 3 }} activeDot={{ r: 5 }} />
-            </LineChart>
-          </ResponsiveContainer>
+
+          {/* Cards grid */}
+          <div className="p-3">
+            <div className="flex flex-wrap gap-3">
+              {(showAllGroups ? groupedCards : groupedCards.slice(0, 6)).map((g) => {
+                const prodColor = g.avgProd >= 80 ? '#22c55e' : g.avgProd >= 50 ? '#d97706' : '#ef4444';
+                const qcColor   = g.avgQc   >= 80 ? '#22c55e' : g.avgQc   >= 50 ? '#d97706' : '#ef4444';
+                const hasCrit = g.critical > 0 || g.high > 0;
+                return (
+                  <div key={g.key} className="rounded-lg p-3 flex flex-col gap-2" style={{ background: '#1c2230', border: `1px solid ${hasCrit ? 'rgba(239,68,68,0.2)' : 'rgba(255,255,255,0.07)'}`, minWidth: 180, flex: '1 1 180px', maxWidth: 240 }}>
+                    <div className="flex items-start justify-between gap-1">
+                      <span className="text-xs font-semibold leading-tight" style={{ color: '#e8eaf0' }}>{g.key}</span>
+                      <span className="text-xs flex-shrink-0" style={{ color: '#6b7280' }}>{g.count} {g.count === 1 ? 'study' : 'studies'}</span>
+                    </div>
+                    <div className="space-y-1.5">
+                      <div>
+                        <div className="flex justify-between text-xs mb-0.5">
+                          <span style={{ color: '#6b7280' }}>Prod</span>
+                          <span style={{ color: prodColor, fontWeight: 600 }}>{g.avgProd.toFixed(0)}%</span>
+                        </div>
+                        <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.08)' }}>
+                          <div className="h-full rounded-full" style={{ width: `${g.avgProd}%`, background: prodColor }} />
+                        </div>
+                      </div>
+                      <div>
+                        <div className="flex justify-between text-xs mb-0.5">
+                          <span style={{ color: '#6b7280' }}>QC</span>
+                          <span style={{ color: qcColor, fontWeight: 600 }}>{g.avgQc.toFixed(0)}%</span>
+                        </div>
+                        <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.08)' }}>
+                          <div className="h-full rounded-full" style={{ width: `${g.avgQc}%`, background: qcColor }} />
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1.5 flex-wrap pt-0.5" style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+                      {g.critical > 0 && <span className="text-xs px-1.5 py-0.5 rounded-full" style={{ background: 'rgba(239,68,68,0.15)', color: '#ef4444' }}>🔴 {g.critical}</span>}
+                      {g.high     > 0 && <span className="text-xs px-1.5 py-0.5 rounded-full" style={{ background: 'rgba(249,115,22,0.15)', color: '#f97316' }}>🟠 {g.high}</span>}
+                      {g.elevated > 0 && <span className="text-xs px-1.5 py-0.5 rounded-full" style={{ background: 'rgba(245,158,11,0.15)', color: '#f59e0b' }}>🟡 {g.elevated}</span>}
+                      {g.sigDelays > 0 && <span className="text-xs ml-auto" style={{ color: '#6b7280' }}>⏱ {g.sigDelays}</span>}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            {groupedCards.length > 6 && (
+              <button onClick={() => setShowAllGroups((v) => !v)} className="mt-2 text-xs px-3 py-1 rounded" style={{ color: '#8892a4', background: 'rgba(255,255,255,0.04)' }}>
+                {showAllGroups ? `▲ Show top 6` : `▼ Show all ${groupedCards.length} groups`}
+              </button>
+            )}
+          </div>
+
+          {/* Collapsible trend chart */}
+          {showTrend && (
+            <div className="px-4 pb-4 pt-1" style={{ borderTop: '1px solid rgba(255,255,255,0.07)' }}>
+              <p className="text-xs mb-2" style={{ color: '#6b7280' }}>
+                Delivery Trend{chartLabel ? ` — ${chartLabel}` : ''} · {chartStudies.length} studies · Prod {chartAvgProd.toFixed(1)}% · QC {chartAvgQc.toFixed(1)}%
+              </p>
+              <ResponsiveContainer width="100%" height={160}>
+                <LineChart data={trendData} margin={{ top: 4, right: 20, left: 0, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+                  <XAxis dataKey="date" tick={{ fill: '#6b7280', fontSize: 10 }} axisLine={false} tickLine={false} />
+                  <YAxis domain={['auto','auto']} tick={{ fill: '#6b7280', fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={(v) => `${v}%`} />
+                  <Tooltip contentStyle={{ background: '#1c2230', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 6, fontSize: 11 }} formatter={(v) => [`${v}%`]} />
+                  <Line type="monotone" dataKey="prod_pct" name="Production" stroke="#2ea55e" strokeWidth={1.5} dot={false} activeDot={{ r: 4 }} />
+                  <Line type="monotone" dataKey="qc_pct" name="QC" stroke="#3b82f6" strokeWidth={1.5} dot={false} activeDot={{ r: 4 }} />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          )}
         </div>
 
         {/* Client/Study Drill-Down Table */}
