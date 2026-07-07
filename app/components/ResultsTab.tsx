@@ -184,6 +184,48 @@ function DrillDown({ study, onClose, effectiveTier: eTier, riskBump }: DrillDown
         <button onClick={onClose} className="text-xs px-2 py-1 rounded text-white/60 hover:text-white">✕ Close</button>
       </div>
 
+      {/* Milestone strip */}
+      <div className="flex items-stretch gap-0" style={{ borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
+        {[
+          { label: 'First Patient In (FPI)', value: study.fpi },
+          { label: 'Database Lock (DBL)', value: study.dbl, weeks: study.weeks_to_dbl },
+        ].map(({ label, value, weeks }) => {
+          const parts = value ? value.split('-') : null;
+          const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+          const formatted = parts && parts.length >= 2
+            ? (parts.length >= 3 ? `${parts[2]}-${months[+parts[1]-1]}-${parts[0]}` : `${months[+parts[1]-1]}-${parts[0]}`)
+            : null;
+          return (
+            <div key={label} className="flex-1 px-5 py-3" style={{ background: formatted ? '#1a5c38' : 'rgba(255,255,255,0.03)', borderRight: '1px solid rgba(255,255,255,0.07)' }}>
+              <p className="text-xs mb-1" style={{ color: formatted ? 'rgba(255,255,255,0.65)' : '#6b7280' }}>{label}</p>
+              <p className="text-sm font-bold" style={{ color: formatted ? '#fff' : '#6b7280' }}>{formatted ?? 'Not set'}</p>
+              {weeks !== undefined && weeks !== null && formatted && (
+                <p className="text-xs mt-0.5" style={{ color: weeks < 0 ? '#fca5a5' : weeks <= 8 ? '#fde68a' : 'rgba(255,255,255,0.5)' }}>
+                  {weeks < 0 ? `${Math.abs(weeks).toFixed(0)} wks overdue` : `${weeks.toFixed(0)} wks remaining`}
+                </p>
+              )}
+            </div>
+          );
+        })}
+        <div className="flex-1 px-5 py-3" style={{ background: 'rgba(255,255,255,0.03)' }}>
+          <p className="text-xs mb-1" style={{ color: '#6b7280' }}>Next Major Deliverable</p>
+          {(() => {
+            const today = '2026-05-28';
+            const ms = [
+              ...(study.fpi && study.fpi >= today ? [{ type: 'FPI', date: study.fpi }] : []),
+              ...(study.dbl && study.dbl >= today ? [{ type: 'DBL', date: study.dbl }] : []),
+            ].sort((a, b) => a.date.localeCompare(b.date));
+            if (ms.length > 0) {
+              const parts = ms[0].date.split('-');
+              const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+              const fmt = parts.length >= 2 ? `${months[+parts[1]-1]}-${parts[0]}` : ms[0].date;
+              return <p className="text-sm font-bold text-white">{ms[0].type}: {fmt}</p>;
+            }
+            return <p className="text-sm" style={{ color: '#8892a4' }}>Not available</p>;
+          })()}
+        </div>
+      </div>
+
       <div className="p-4 space-y-4">
         <div>
           <p className="text-xs font-bold uppercase tracking-wider mb-2" style={{ color: '#2ea55e' }}>Completion by Study</p>
