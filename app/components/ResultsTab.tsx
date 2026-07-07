@@ -767,7 +767,7 @@ export default function ResultsTab({ studies, savedUpdates = [] }: { studies: St
   const [fsoFspFilter, setFsoFspFilter] = useState<'All' | 'FSO' | 'FSP'>('All');
   const [riskFilter, setRiskFilter] = useState<string>('All');
   const [downloadToast, setDownloadToast] = useState(false);
-  const [groupBy, setGroupBy] = useState<'client' | 'portfolio' | 'fso_fsp'>('client');
+  const [groupBy, setGroupBy] = useState<'client' | 'portfolio' | 'fso_fsp' | 'risk_tier'>('client');
   const [showTrend, setShowTrend] = useState(false);
   const [showAllGroups, setShowAllGroups] = useState(false);
 
@@ -823,20 +823,31 @@ export default function ResultsTab({ studies, savedUpdates = [] }: { studies: St
   const groupedCards = useMemo(() => {
     const map: Record<string, Study[]> = {};
     tableFiltered.forEach((s) => {
-      const key = String(s[groupBy] ?? 'Unknown');
+      const key = groupBy === 'risk_tier'
+        ? effectiveTier(s, savedUpdates)
+        : String(s[groupBy as keyof Study] ?? 'Unknown');
       (map[key] = map[key] || []).push(s);
     });
-    return Object.entries(map).map(([key, grp]) => {
-      const avgProd = grp.reduce((a, s) => a + s.prod_pct, 0) / grp.length;
-      const avgQc   = grp.reduce((a, s) => a + s.qc_pct,   0) / grp.length;
-      const critical  = grp.filter((s) => effectiveTier(s, savedUpdates) === 'Critical').length;
-      const high      = grp.filter((s) => effectiveTier(s, savedUpdates) === 'High').length;
-      const elevated  = grp.filter((s) => effectiveTier(s, savedUpdates) === 'Elevated').length;
-      const sigDelays = grp.reduce((a, s) => a + s.sig_delays, 0);
-      const failedQc  = grp.reduce((a, s) => a + s.failed_qc, 0);
+    const cards = Object.entries(map).map(([key, grp]) => {
+      const avgProd    = grp.reduce((a, s) => a + s.prod_pct, 0) / grp.length;
+      const avgQc      = grp.reduce((a, s) => a + s.qc_pct,   0) / grp.length;
+      const avgScore   = grp.reduce((a, s) => a + effectiveScore(s, savedUpdates), 0) / grp.length;
+      const critical   = grp.filter((s) => effectiveTier(s, savedUpdates) === 'Critical').length;
+      const high       = grp.filter((s) => effectiveTier(s, savedUpdates) === 'High').length;
+      const elevated   = grp.filter((s) => effectiveTier(s, savedUpdates) === 'Elevated').length;
+      const moderate   = grp.filter((s) => effectiveTier(s, savedUpdates) === 'Moderate').length;
+      const low        = grp.filter((s) => effectiveTier(s, savedUpdates) === 'Low').length;
+      const sigDelays  = grp.reduce((a, s) => a + s.sig_delays, 0);
+      const failedQc   = grp.reduce((a, s) => a + s.failed_qc, 0);
+      const atRisk     = grp.filter((s) => s.at_risk).length;
+      const delayed    = grp.filter((s) => s.delayed).length;
       const worstScore = Math.max(...grp.map((s) => effectiveScore(s, savedUpdates)));
-      return { key, count: grp.length, avgProd, avgQc, critical, high, elevated, sigDelays, failedQc, worstScore };
-    }).sort((a, b) => b.worstScore - a.worstScore);
+      return { key, count: grp.length, avgProd, avgQc, avgScore, critical, high, elevated, moderate, low, sigDelays, failedQc, atRisk, delayed, worstScore };
+    });
+    if (groupBy === 'risk_tier') {
+      return cards.sort((a, b) => (RISK_ORDER[a.key] ?? 99) - (RISK_ORDER[b.key] ?? 99));
+    }
+    return cards.sort((a, b) => b.worstScore - a.worstScore);
   }, [tableFiltered, groupBy, savedUpdates]);
 
   const delayed = sidebarFiltered.filter((s) => s.delayed).length;
@@ -1089,7 +1100,7 @@ export default function ResultsTab({ studies, savedUpdates = [] }: { studies: St
           <div className="flex items-center justify-between px-4 py-2.5" style={{ borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
             <div className="flex items-center gap-3">
               <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: '#8892a4' }}>Group by</span>
-              {([['client','Sponsor'],['portfolio','Portfolio'],['fso_fsp','Type']] as const).map(([val, label]) => (
+              {([['client','Sponsor'],['portfolio','Portfolio'],['fso_fsp','Type'],['risk_tier','Risk']] as const).map(([val, label]) => (
                 <button key={val} onClick={() => { setGroupBy(val); setShowAllGroups(false); }}
                   className="text-xs px-2.5 py-1 rounded font-medium"
                   style={{ background: groupBy === val ? 'rgba(46,165,94,0.15)' : 'rgba(255,255,255,0.05)', color: groupBy === val ? '#2ea55e' : '#8892a4', border: groupBy === val ? '1px solid rgba(46,165,94,0.3)' : '1px solid transparent' }}>
@@ -1107,15 +1118,27 @@ export default function ResultsTab({ studies, savedUpdates = [] }: { studies: St
           <div className="p-3">
             <div className="flex flex-wrap gap-3">
               {(showAllGroups ? groupedCards : groupedCards.slice(0, 6)).map((g) => {
-                const prodColor = g.avgProd >= 80 ? '#22c55e' : g.avgProd >= 50 ? '#d97706' : '#ef4444';
-                const qcColor   = g.avgQc   >= 80 ? '#22c55e' : g.avgQc   >= 50 ? '#d97706' : '#ef4444';
-                const hasCrit = g.critical > 0 || g.high > 0;
+                const prodColor  = g.avgProd  >= 80 ? '#22c55e' : g.avgProd  >= 50 ? '#d97706' : '#ef4444';
+                const qcColor    = g.avgQc    >= 80 ? '#22c55e' : g.avgQc    >= 50 ? '#d97706' : '#ef4444';
+                const scoreColor = g.avgScore >= 0.7 ? '#ef4444' : g.avgScore >= 0.4 ? '#f97316' : '#22c55e';
+                const hasCrit    = g.critical > 0 || g.high > 0;
+                const isRiskView = groupBy === 'risk_tier';
+                const tierColor: Record<string, string> = { Critical: '#ef4444', High: '#f97316', Elevated: '#f59e0b', Moderate: '#eab308', Low: '#22c55e' };
+                const cardBorder = isRiskView
+                  ? `1px solid ${(tierColor[g.key] ?? '#6b7280')}33`
+                  : `1px solid ${hasCrit ? 'rgba(239,68,68,0.2)' : 'rgba(255,255,255,0.07)'}`;
                 return (
-                  <div key={g.key} className="rounded-lg p-3 flex flex-col gap-2" style={{ background: '#1c2230', border: `1px solid ${hasCrit ? 'rgba(239,68,68,0.2)' : 'rgba(255,255,255,0.07)'}`, minWidth: 180, flex: '1 1 180px', maxWidth: 240 }}>
+                  <div key={g.key} className="rounded-lg p-3 flex flex-col gap-2" style={{ background: '#1c2230', border: cardBorder, minWidth: 190, flex: '1 1 190px', maxWidth: 260 }}>
+                    {/* Header */}
                     <div className="flex items-start justify-between gap-1">
-                      <span className="text-xs font-semibold leading-tight" style={{ color: '#e8eaf0' }}>{g.key}</span>
+                      <div className="flex items-center gap-1.5">
+                        {isRiskView && <span>{RISK_EMOJI[g.key] ?? ''}</span>}
+                        <span className="text-xs font-semibold leading-tight" style={{ color: isRiskView ? (tierColor[g.key] ?? '#e8eaf0') : '#e8eaf0' }}>{g.key}</span>
+                      </div>
                       <span className="text-xs flex-shrink-0" style={{ color: '#6b7280' }}>{g.count} {g.count === 1 ? 'study' : 'studies'}</span>
                     </div>
+
+                    {/* Delivery bars */}
                     <div className="space-y-1.5">
                       <div>
                         <div className="flex justify-between text-xs mb-0.5">
@@ -1135,12 +1158,35 @@ export default function ResultsTab({ studies, savedUpdates = [] }: { studies: St
                           <div className="h-full rounded-full" style={{ width: `${g.avgQc}%`, background: qcColor }} />
                         </div>
                       </div>
+                      <div>
+                        <div className="flex justify-between text-xs mb-0.5">
+                          <span style={{ color: '#6b7280' }}>Avg Risk Score</span>
+                          <span style={{ color: scoreColor, fontWeight: 600 }}>{(g.avgScore * 100).toFixed(0)}%</span>
+                        </div>
+                        <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.08)' }}>
+                          <div className="h-full rounded-full" style={{ width: `${g.avgScore * 100}%`, background: scoreColor }} />
+                        </div>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-1.5 flex-wrap pt-0.5" style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}>
-                      {g.critical > 0 && <span className="text-xs px-1.5 py-0.5 rounded-full" style={{ background: 'rgba(239,68,68,0.15)', color: '#ef4444' }}>🔴 {g.critical}</span>}
-                      {g.high     > 0 && <span className="text-xs px-1.5 py-0.5 rounded-full" style={{ background: 'rgba(249,115,22,0.15)', color: '#f97316' }}>🟠 {g.high}</span>}
-                      {g.elevated > 0 && <span className="text-xs px-1.5 py-0.5 rounded-full" style={{ background: 'rgba(245,158,11,0.15)', color: '#f59e0b' }}>🟡 {g.elevated}</span>}
-                      {g.sigDelays > 0 && <span className="text-xs ml-auto" style={{ color: '#6b7280' }}>⏱ {g.sigDelays}</span>}
+
+                    {/* Risk tier badges (hidden when grouping by risk since all same tier) */}
+                    {!isRiskView && (
+                      <div className="flex items-center gap-1.5 flex-wrap pt-0.5" style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+                        {g.critical > 0 && <span className="text-xs px-1.5 py-0.5 rounded-full" style={{ background: 'rgba(239,68,68,0.15)', color: '#ef4444' }}>🔴 {g.critical}</span>}
+                        {g.high     > 0 && <span className="text-xs px-1.5 py-0.5 rounded-full" style={{ background: 'rgba(249,115,22,0.15)', color: '#f97316' }}>🟠 {g.high}</span>}
+                        {g.elevated > 0 && <span className="text-xs px-1.5 py-0.5 rounded-full" style={{ background: 'rgba(245,158,11,0.15)', color: '#f59e0b' }}>🟡 {g.elevated}</span>}
+                      </div>
+                    )}
+
+                    {/* Footer metrics */}
+                    <div className="flex items-center gap-2 flex-wrap pt-0.5 text-xs" style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+                      {g.sigDelays > 0 && <span style={{ color: '#f97316' }}>⏱ {g.sigDelays} delay{g.sigDelays !== 1 ? 's' : ''}</span>}
+                      {g.failedQc  > 0 && <span style={{ color: '#ef4444' }}>✗ {g.failedQc} QC fail{g.failedQc !== 1 ? 's' : ''}</span>}
+                      {g.atRisk    > 0 && <span style={{ color: '#f59e0b' }}>⚠ {g.atRisk} at-risk</span>}
+                      {g.delayed   > 0 && <span style={{ color: '#8892a4' }}>🕐 {g.delayed} delayed</span>}
+                      {g.sigDelays === 0 && g.failedQc === 0 && g.atRisk === 0 && g.delayed === 0 && (
+                        <span style={{ color: '#2ea55e' }}>✓ On track</span>
+                      )}
                     </div>
                   </div>
                 );
