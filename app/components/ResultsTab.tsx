@@ -1169,14 +1169,42 @@ export default function ResultsTab({ studies, savedUpdates = [] }: { studies: St
                       </div>
                     </div>
 
-                    {/* Risk tier badges (hidden when grouping by risk since all same tier) */}
-                    {!isRiskView && (
-                      <div className="flex items-center gap-1.5 flex-wrap pt-0.5" style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}>
-                        {g.critical > 0 && <span className="text-xs px-1.5 py-0.5 rounded-full" style={{ background: 'rgba(239,68,68,0.15)', color: '#ef4444' }}>🔴 {g.critical}</span>}
-                        {g.high     > 0 && <span className="text-xs px-1.5 py-0.5 rounded-full" style={{ background: 'rgba(249,115,22,0.15)', color: '#f97316' }}>🟠 {g.high}</span>}
-                        {g.elevated > 0 && <span className="text-xs px-1.5 py-0.5 rounded-full" style={{ background: 'rgba(245,158,11,0.15)', color: '#f59e0b' }}>🟡 {g.elevated}</span>}
-                      </div>
-                    )}
+                    {/* Risk distribution stacked bar */}
+                    {(() => {
+                      const tiers = [
+                        { label: 'Critical', count: g.critical, color: '#ef4444' },
+                        { label: 'High',     count: g.high,     color: '#f97316' },
+                        { label: 'Elevated', count: g.elevated, color: '#f59e0b' },
+                        { label: 'Moderate', count: g.moderate, color: '#eab308' },
+                        { label: 'Low',      count: g.low,      color: '#22c55e' },
+                      ].filter((t) => t.count > 0);
+                      const total = tiers.reduce((s, t) => s + t.count, 0);
+                      if (total === 0) return null;
+                      return (
+                        <div className="pt-0.5" style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+                          <div className="flex justify-between text-xs mb-1">
+                            <span style={{ color: '#6b7280' }}>Risk distribution</span>
+                            <span style={{ color: '#4b5563' }}>{total} studies</span>
+                          </div>
+                          {/* Stacked bar */}
+                          <div className="flex h-2 rounded-full overflow-hidden gap-px" style={{ background: 'rgba(255,255,255,0.06)' }}>
+                            {tiers.map((t) => (
+                              <div key={t.label} title={`${t.label}: ${t.count}`}
+                                style={{ width: `${(t.count / total) * 100}%`, background: t.color, minWidth: t.count > 0 ? 2 : 0 }} />
+                            ))}
+                          </div>
+                          {/* Legend */}
+                          <div className="flex flex-wrap gap-x-2 gap-y-0.5 mt-1">
+                            {tiers.map((t) => (
+                              <span key={t.label} className="text-xs flex items-center gap-0.5">
+                                <span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: 2, background: t.color, flexShrink: 0 }} />
+                                <span style={{ color: '#6b7280' }}>{t.label[0]}: {t.count}</span>
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })()}
 
                     {/* Footer metrics */}
                     <div className="flex items-center gap-2 flex-wrap pt-0.5 text-xs" style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}>
