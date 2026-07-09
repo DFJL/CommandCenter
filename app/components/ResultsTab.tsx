@@ -370,34 +370,47 @@ function DrillDown({ study, onClose, effectiveTier: eTier, riskBump, studyUpdate
         </div>
       </div>
 
-      {/* RAG + Status strip */}
-      <div className="flex items-start gap-4 px-5 py-2.5 flex-wrap" style={{ borderBottom: '1px solid rgba(255,255,255,0.07)', background: 'rgba(26,92,56,0.04)' }}>
-        <RagBadge label="Stats RAG" value={statsRag} onChange={(v) => { setStatsRag(v); saveRag(v, progRag); }} />
-        <RagBadge label="Programming RAG" value={progRag} onChange={(v) => { setProgRag(v); saveRag(statsRag, v); }} />
-        <div style={{ width: 1, height: 20, background: 'rgba(255,255,255,0.08)', alignSelf: 'center' }} />
-        <div className="flex-1 flex items-start gap-2 min-w-0">
-          <span className="text-xs flex-shrink-0 mt-1.5" style={{ color: '#6b7280' }}>Status</span>
-          <textarea
-            value={statsStatus}
-            onChange={(e) => { setStatsStatus(e.target.value); setStatusDirty(true); }}
-            onBlur={saveStatus}
-            rows={2}
-            placeholder="Add status comments, notes, key updates…"
-            className="flex-1 text-xs rounded px-2 py-1 outline-none resize-none"
-            style={{ background: 'rgba(255,255,255,0.04)', color: '#e8eaf0', border: '1px solid rgba(255,255,255,0.08)', minWidth: 200 }}
-          />
-          {statusDirty && (
-            <button onClick={saveStatus} className="text-xs px-2 py-1 rounded flex-shrink-0" style={{ background: 'rgba(46,165,94,0.15)', color: '#2ea55e', border: '1px solid rgba(46,165,94,0.3)' }}>Save</button>
-          )}
-        </div>
-      </div>
-
       {/* Milestone timeline */}
       <div className="px-4 pt-3 pb-1">
         <p className="text-xs font-bold uppercase tracking-wider mb-2" style={{ color: '#2ea55e' }}>
-          Timeline · click RAG to cycle · <span style={{ color: '#4b5563', fontWeight: 400, textTransform: 'none' }}>add milestones in Study Log → Milestones</span>
+          Timeline · <span style={{ color: '#4b5563', fontWeight: 400, textTransform: 'none' }}>add milestones via Study Log → Milestones</span>
         </p>
         <MilestoneTimeline study={study} studyUpdate={studyUpdate} />
+      </div>
+
+      {/* Status & Comments */}
+      <div className="px-4 pb-3">
+        <div className="rounded-lg" style={{ background: '#1c2230', border: '1px solid rgba(255,255,255,0.08)' }}>
+          <div className="flex items-center justify-between px-4 py-2.5" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)', background: 'rgba(255,255,255,0.02)', borderRadius: '8px 8px 0 0' }}>
+            <span className="text-xs font-bold uppercase tracking-wider" style={{ color: '#8892a4', letterSpacing: '0.08em' }}>Status &amp; Comments</span>
+            {studyUpdate?.savedAt && (
+              <span className="text-xs" style={{ color: '#4b5563' }}>
+                Last saved {new Date(studyUpdate.savedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+              </span>
+            )}
+          </div>
+          <div className="p-3">
+            <textarea
+              value={statsStatus}
+              onChange={(e) => { setStatsStatus(e.target.value); setStatusDirty(true); }}
+              onBlur={saveStatus}
+              rows={3}
+              placeholder="Add status update, key risks, escalations, or action items…"
+              className="w-full text-xs rounded-md px-3 py-2 outline-none resize-none"
+              style={{ background: 'rgba(255,255,255,0.03)', color: '#e8eaf0', border: '1px solid rgba(255,255,255,0.07)', lineHeight: 1.6, fontFamily: 'inherit' }}
+            />
+            <div className="flex justify-end mt-2">
+              <button
+                onClick={saveStatus}
+                disabled={!statusDirty}
+                className="text-xs px-3 py-1 rounded"
+                style={{ background: statusDirty ? 'rgba(46,165,94,0.18)' : 'rgba(255,255,255,0.04)', color: statusDirty ? '#2ea55e' : '#4b5563', border: `1px solid ${statusDirty ? 'rgba(46,165,94,0.35)' : 'rgba(255,255,255,0.06)'}`, cursor: statusDirty ? 'pointer' : 'default', transition: 'all 0.15s' }}
+              >
+                {statusDirty ? 'Save update' : 'Saved'}
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
 
       <div className="p-4 space-y-4">
@@ -508,6 +521,11 @@ function DrillDown({ study, onClose, effectiveTier: eTier, riskBump, studyUpdate
 
           <div className="rounded p-3" style={{ background: 'rgba(59,130,246,0.06)', border: '1px solid rgba(59,130,246,0.2)' }}>
             <p className="text-xs font-bold uppercase tracking-wider mb-3" style={{ color: '#3b82f6' }}>Risk Model</p>
+            {/* RAG Status */}
+            <div className="flex gap-2 mb-3 pb-3" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+              <RagBadge label="Stats" value={statsRag} onChange={(v) => { setStatsRag(v); saveRag(v, progRag); }} />
+              <RagBadge label="Programming" value={progRag} onChange={(v) => { setProgRag(v); saveRag(statsRag, v); }} />
+            </div>
             <div className="space-y-2 mb-3">
               {[
                 { label: 'ML Score', value: computeAiScore(study), color: '#3b82f6', tip: 'Feature-engineered composite: schedule pressure (28%), QC gap (22%), failure rate (18%), production gap (12%), delay score (10%), risk flags (10%)' },
