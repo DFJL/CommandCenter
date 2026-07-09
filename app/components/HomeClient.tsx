@@ -1,1 +1,77 @@
-J3VzZSBjbGllbnQnOwoKaW1wb3J0IHsgdXNlU3RhdGUsIHVzZUVmZmVjdCB9IGZyb20gJ3JlYWN0JzsKaW1wb3J0IHR5cGUgeyBTdHVkeSwgUDIxRmluZGluZywgU3R1ZHlVcGRhdGUgfSBmcm9tICcuLi90eXBlcyc7CmltcG9ydCBSZXN1bHRzVGFiIGZyb20gJy4vUmVzdWx0c1RhYic7CmltcG9ydCBEYXRhUXVhbGl0eVRhYiBmcm9tICcuL0RhdGFRdWFsaXR5VGFiJzsKaW1wb3J0IFByb2dyYW1taW5nSXNzdWVzVGFiIGZyb20gJy4vUHJvZ3JhbW1pbmdJc3N1ZXNUYWInOwppbXBvcnQgU3R1ZHlVcGRhdGVzVGFiIGZyb20gJy4vU3R1ZHlVcGRhdGVzVGFiJzsKCnR5cGUgVGFiID0gJ3Jlc3VsdHMnIHwgJ2RxJyB8ICdpc3N1ZXMnIHwgJ3VwZGF0ZXMnOwoKaW50ZXJmYWNlIFByb3BzIHsKICBzdHVkaWVzOiBTdHVkeVtdOwogIGZpbmRpbmdzOiBQMjFGaW5kaW5nW107Cn0KCmV4cG9ydCBkZWZhdWx0IGZ1bmN0aW9uIEhvbWVDbGllbnQoeyBzdHVkaWVzLCBmaW5kaW5ncyB9OiBQcm9wcykgewogIGNvbnN0IFthY3RpdmVUYWIsIHNldEFjdGl2ZVRhYl0gPSB1c2VTdGF0ZTxUYWI+KCdyZXN1bHRzJyk7CiAgY29uc3QgW3VwZGF0ZXMsIHNldFVwZGF0ZXNdID0gdXNlU3RhdGU8U3R1ZHlVcGRhdGVbXT4oW10pOwoKICB1c2VFZmZlY3QoKCkgPT4gewogICAgdHJ5IHsKICAgICAgY29uc3Qgc2F2ZWQgPSBsb2NhbFN0b3JhZ2UuZ2V0SXRlbSgnc3R1ZHlVcGRhdGVzJyk7CiAgICAgIGlmIChzYXZlZCkgc2V0VXBkYXRlcyhKU09OLnBhcnNlKHNhdmVkKSk7CiAgICB9IGNhdGNoIHsKICAgICAgLy8gaWdub3JlCiAgICB9CiAgfSwgW10pOwoKICBjb25zdCBoYW5kbGVTYXZlVXBkYXRlID0gKHVwZGF0ZTogU3R1ZHlVcGRhdGUpID0+IHsKICAgIGNvbnN0IG5leHQgPSBbdXBkYXRlLCAuLi51cGRhdGVzXTsKICAgIHNldFVwZGF0ZXMobmV4dCk7CiAgICBsb2NhbFN0b3JhZ2Uuc2V0SXRlbSgnc3R1ZHlVcGRhdGVzJywgSlNPTi5zdHJpbmdpZnkobmV4dCkpOwogIH07CgogIGNvbnN0IHRhYnM6IHsgaWQ6IFRhYjsgbGFiZWw6IHN0cmluZyB9W10gPSBbCiAgICB7IGlkOiAncmVzdWx0cycsIGxhYmVsOiAnUG9ydGZvbGlvJyB9LAogICAgeyBpZDogJ2RxJywgICAgICBsYWJlbDogJ0RhdGEgUXVhbGl0eScgfSwKICAgIHsgaWQ6ICdpc3N1ZXMnLCAgbGFiZWw6ICdRQyBGaW5kaW5ncycgfSwKICAgIHsgaWQ6ICd1cGRhdGVzJywgbGFiZWw6ICdTdHVkeSBMb2cnIH0sCiAgXTsKCiAgcmV0dXJuICgKICAgIDxkaXYgc3R5bGU9e3sgYmFja2dyb3VuZDogJyMwZDExMTcnLCBtaW5IZWlnaHQ6ICdjYWxjKDEwMHZoIC0gNTZweCknIH19PgogICAgICB7LyogVGFiIGJhciAqL30KICAgICAgPGRpdgogICAgICAgIGNsYXNzTmFtZT0iZmxleCBnYXAtMCBib3JkZXItYiBweC02IHB0LTQiCiAgICAgICAgc3R5bGU9e3sgYm9yZGVyQ29sb3I6ICdyZ2JhKDI1NSwyNTUsMjU1LDAuMDcpJyB9fQogICAgICA+CiAgICAgICAge3RhYnMubWFwKCh0YWIpID0+ICgKICAgICAgICAgIDxidXR0b24KICAgICAgICAgICAga2V5PXt0YWIuaWR9CiAgICAgICAgICAgIG9uQ2xpY2s9eygpID0+IHNldEFjdGl2ZVRhYih0YWIuaWQpfQogICAgICAgICAgICBjbGFzc05hbWU9InB4LTUgcHktMiB0ZXh0LXNtIGZvbnQtbWVkaXVtIHJvdW5kZWQtdC1sZyBtci0xIHRyYW5zaXRpb24tY29sb3JzIgogICAgICAgICAgICBzdHlsZT17CiAgICAgICAgICAgICAgYWN0aXZlVGFiID09PSB0YWIuaWQKICAgICAgICAgICAgICAgID8geyBiYWNrZ3JvdW5kOiAnIzE2MWIyNCcsIGNvbG9yOiAnIzJlYTU1ZScsIGJvcmRlckJvdHRvbTogJzJweCBzb2xpZCAjMmVhNTVlJyB9CiAgICAgICAgICAgICAgICA6IHsgYmFja2dyb3VuZDogJ3RyYW5zcGFyZW50JywgY29sb3I6ICcjODg5MmE0JyB9CiAgICAgICAgICAgIH0KICAgICAgICAgID4KICAgICAgICAgICAge3RhYi5sYWJlbH0KICAgICAgICAgIDwvYnV0dG9uPgogICAgICAgICkpfQogICAgICA8L2Rpdj4KCiAgICAgIHsvKiBUYWIgY29udGVudCAqL30KICAgICAgPGRpdj4KICAgICAgICB7YWN0aXZlVGFiID09PSAncmVzdWx0cycgICYmIDxSZXN1bHRzVGFiIHN0dWRpZXM9e3N0dWRpZXN9IHNhdmVkVXBkYXRlcz17dXBkYXRlc30gb25TYXZlVXBkYXRlPXtoYW5kbGVTYXZlVXBkYXRlfSAvPn0KICAgICAgICB7YWN0aXZlVGFiID09PSAnZHEnICAgICAgICYmIDxEYXRhUXVhbGl0eVRhYiAvPn0KICAgICAgICB7YWN0aXZlVGFiID09PSAnaXNzdWVzJyAgICYmIDxQcm9ncmFtbWluZ0lzc3Vlc1RhYiBmaW5kaW5ncz17ZmluZGluZ3N9IC8+fQogICAgICAgIHthY3RpdmVUYWIgPT09ICd1cGRhdGVzJyAgJiYgKAogICAgICAgICAgPFN0dWR5VXBkYXRlc1RhYiBzdHVkaWVzPXtzdHVkaWVzfSBvblNhdmU9e2hhbmRsZVNhdmVVcGRhdGV9IHNhdmVkVXBkYXRlcz17dXBkYXRlc30gLz4KICAgICAgICApfQogICAgICA8L2Rpdj4KICAgIDwvZGl2PgogICk7Cn0K
+'use client';
+
+import { useState, useEffect } from 'react';
+import type { Study, P21Finding, StudyUpdate } from '../types';
+import ResultsTab from './ResultsTab';
+import DataQualityTab from './DataQualityTab';
+import ProgrammingIssuesTab from './ProgrammingIssuesTab';
+import StudyUpdatesTab from './StudyUpdatesTab';
+
+type Tab = 'results' | 'dq' | 'issues' | 'updates';
+
+interface Props {
+  studies: Study[];
+  findings: P21Finding[];
+}
+
+export default function HomeClient({ studies, findings }: Props) {
+  const [activeTab, setActiveTab] = useState<Tab>('results');
+  const [updates, setUpdates] = useState<StudyUpdate[]>([]);
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('studyUpdates');
+      if (saved) setUpdates(JSON.parse(saved));
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  const handleSaveUpdate = (update: StudyUpdate) => {
+    const next = [update, ...updates];
+    setUpdates(next);
+    localStorage.setItem('studyUpdates', JSON.stringify(next));
+  };
+
+  const tabs: { id: Tab; label: string }[] = [
+    { id: 'results', label: 'Portfolio' },
+    { id: 'dq',      label: 'Data Quality' },
+    { id: 'issues',  label: 'QC Findings' },
+    { id: 'updates', label: 'Study Log' },
+  ];
+
+  return (
+    <div style={{ background: '#0d1117', minHeight: 'calc(100vh - 56px)' }}>
+      {/* Tab bar */}
+      <div
+        className="flex gap-0 border-b px-6 pt-4"
+        style={{ borderColor: 'rgba(255,255,255,0.07)' }}
+      >
+        {tabs.map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className="px-5 py-2 text-sm font-medium rounded-t-lg mr-1 transition-colors"
+            style={
+              activeTab === tab.id
+                ? { background: '#161b24', color: '#2ea55e', borderBottom: '2px solid #2ea55e' }
+                : { background: 'transparent', color: '#8892a4' }
+            }
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Tab content */}
+      <div>
+        {activeTab === 'results'  && <ResultsTab studies={studies} savedUpdates={updates} onSaveUpdate={handleSaveUpdate} />}
+        {activeTab === 'dq'       && <DataQualityTab />}
+        {activeTab === 'issues'   && <ProgrammingIssuesTab findings={findings} />}
+        {activeTab === 'updates'  && (
+          <StudyUpdatesTab studies={studies} onSave={handleSaveUpdate} savedUpdates={updates} />
+        )}
+      </div>
+    </div>
+  );
+}
