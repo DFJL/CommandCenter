@@ -44,14 +44,14 @@ export default function HomeClient({ studies, findings }: Props) {
     <div style={{ background: '#0d1117', minHeight: 'calc(100vh - 56px)' }}>
       {/* Tab bar */}
       <div
-        className="flex gap-0 border-b px-6 pt-4"
-        style={{ borderColor: 'rgba(255,255,255,0.07)' }}
+        className="flex gap-0 border-b px-3 sm:px-6 pt-3 sm:pt-4 overflow-x-auto"
+        style={{ borderColor: 'rgba(255,255,255,0.07)', WebkitOverflowScrolling: 'touch' } as React.CSSProperties}
       >
         {tabs.map((tab) => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
-            className="px-5 py-2 text-sm font-medium rounded-t-lg mr-1 transition-colors"
+            className="px-4 sm:px-5 py-2.5 sm:py-2 text-sm font-medium rounded-t-lg mr-1 transition-colors flex-shrink-0"
             style={
               activeTab === tab.id
                 ? { background: '#161b24', color: '#2ea55e', borderBottom: '2px solid #2ea55e' }

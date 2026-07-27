@@ -1141,13 +1141,13 @@ export default function ResultsTab({ studies, savedUpdates = [], onSaveUpdate }:
   const colStyle = { color: '#8892a4', fontSize: 10, fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.05em' };
 
   return (
-    <div className="flex" style={{ minHeight: 'calc(100vh - 112px)' }}>
+    <div className="flex flex-col lg:flex-row" style={{ minHeight: 'calc(100vh - 112px)' }}>
       {downloadToast && (
         <div className="fixed bottom-5 right-5 z-50 px-4 py-3 rounded-lg shadow-lg text-sm" style={{ background: '#2ea55e', color: '#fff' }}>↓ Report download coming soon</div>
       )}
 
       {/* Sidebar */}
-      <aside className="w-56 flex-shrink-0 p-4 border-r flex flex-col gap-4" style={{ background: '#1c2230', borderColor: 'rgba(255,255,255,0.07)' }}>
+      <aside className="w-full lg:w-56 flex-shrink-0 p-4 border-b lg:border-b-0 lg:border-r flex flex-row flex-wrap lg:flex-col gap-4 lg:gap-4" style={{ background: '#1c2230', borderColor: 'rgba(255,255,255,0.07)' }}>
         <div>
           <p className="text-xs font-bold mb-3 uppercase tracking-widest" style={{ color: '#2ea55e' }}>SCOPE</p>
           <div className="flex flex-col gap-2">
@@ -1199,9 +1199,9 @@ export default function ResultsTab({ studies, savedUpdates = [], onSaveUpdate }:
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 p-5 space-y-4 min-w-0">
+      <main className="flex-1 p-3 sm:p-5 space-y-3 sm:space-y-4 min-w-0">
         {/* KPI Row */}
-        <div className="grid grid-cols-5 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-3">
           <div className="rounded-lg p-4 text-center" style={{ background: '#161b24', border: '1px solid rgba(255,255,255,0.07)' }}>
             <div className="text-2xl font-bold" style={{ color: '#e8eaf0' }}>{sidebarFiltered.length}</div>
             <div className="text-xs mt-1" style={{ color: '#8892a4' }}>Total Studies</div>
@@ -1291,20 +1291,20 @@ export default function ResultsTab({ studies, savedUpdates = [], onSaveUpdate }:
         {/* Group metric cards */}
         <div className="rounded-lg overflow-hidden" style={{ background: '#161b24', border: '1px solid rgba(255,255,255,0.07)' }}>
           {/* Header */}
-          <div className="flex items-center justify-between px-4 py-2.5" style={{ borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
-            <div className="flex items-center gap-3">
-              <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: '#8892a4' }}>Group by</span>
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-2.5" style={{ borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
+            <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: '#8892a4' }}>Group by</span>
+            <div className="flex items-center gap-1.5 flex-wrap">
               {([['client','Sponsor'],['portfolio','Portfolio'],['fso_fsp','Type'],['risk_tier','Risk']] as const).map(([val, label]) => (
                 <button key={val} onClick={() => { setGroupBy(val); setShowAllGroups(false); }}
-                  className="text-xs px-2.5 py-1 rounded font-medium"
+                  className="text-xs px-2.5 py-1.5 rounded font-medium"
                   style={{ background: groupBy === val ? 'rgba(46,165,94,0.15)' : 'rgba(255,255,255,0.05)', color: groupBy === val ? '#2ea55e' : '#8892a4', border: groupBy === val ? '1px solid rgba(46,165,94,0.3)' : '1px solid transparent' }}>
                   {label}
                 </button>
               ))}
-              <span className="text-xs" style={{ color: '#4b5563' }}>· {groupedCards.length} groups · {tableFiltered.length} studies</span>
             </div>
-            <button onClick={() => setShowTrend((v) => !v)} className="flex items-center gap-1.5 text-xs px-2.5 py-1 rounded" style={{ background: showTrend ? 'rgba(59,130,246,0.1)' : 'rgba(255,255,255,0.05)', color: showTrend ? '#3b82f6' : '#8892a4', border: showTrend ? '1px solid rgba(59,130,246,0.25)' : '1px solid transparent' }}>
-              📈 Delivery Trend {showTrend ? '▲' : '▼'}
+            <span className="text-xs" style={{ color: '#4b5563' }}>{groupedCards.length} groups · {tableFiltered.length} studies</span>
+            <button onClick={() => setShowTrend((v) => !v)} className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded ml-auto" style={{ background: showTrend ? 'rgba(59,130,246,0.1)' : 'rgba(255,255,255,0.05)', color: showTrend ? '#3b82f6' : '#8892a4', border: showTrend ? '1px solid rgba(59,130,246,0.25)' : '1px solid transparent' }}>
+              📈 Trend {showTrend ? '▲' : '▼'}
             </button>
           </div>
 
@@ -1444,12 +1444,12 @@ export default function ResultsTab({ studies, savedUpdates = [], onSaveUpdate }:
         {/* Client/Study Drill-Down Table */}
         <div className="rounded-lg overflow-hidden" style={{ background: '#161b24', border: '1px solid rgba(255,255,255,0.07)' }}>
           {/* Toolbar */}
-          <div className="flex items-center justify-between px-4 py-3 flex-wrap gap-2" style={{ borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
+          <div className="flex items-start justify-between px-4 py-3 flex-wrap gap-2" style={{ borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
             <p className="text-sm font-semibold" style={{ color: '#e8eaf0' }}>
               Delivery Portfolio
               <span className="ml-2 text-xs font-normal" style={{ color: '#8892a4' }}>({tableFiltered.length} studies)</span>
             </p>
-            <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-2 flex-wrap overflow-x-auto" style={{ WebkitOverflowScrolling: 'touch' } as React.CSSProperties}>
               <input type="text" value={tableSearch} onChange={(e) => setTableSearch(e.target.value)} placeholder="Search…" className="text-xs rounded px-3 py-1.5 border outline-none w-36" style={{ background: '#1c2230', color: '#e8eaf0', borderColor: 'rgba(255,255,255,0.1)' }} />
               <div style={{ borderLeft: '1px solid rgba(255,255,255,0.1)', height: 16 }} />
               <span className="text-xs" style={{ color: '#8892a4' }}>Sort:</span>
@@ -1480,7 +1480,7 @@ export default function ResultsTab({ studies, savedUpdates = [], onSaveUpdate }:
           </div>
 
           {/* Flat study table */}
-          <div style={{ maxHeight: '560px', overflowY: 'auto' }}>
+          <div style={{ maxHeight: '560px', overflowY: 'auto', overflowX: 'auto', WebkitOverflowScrolling: 'touch' } as React.CSSProperties}>
             {sortedStudies.length === 0 ? (
               <div className="px-4 py-8 text-center text-sm" style={{ color: '#8892a4' }}>No studies match the current filters.</div>
             ) : (

@@ -16,19 +16,20 @@ export default function RootLayout({
       <body>
         <nav
           style={{ background: '#1a5c38' }}
-          className="flex items-center justify-between px-6 py-3 shadow-lg border-b border-white/10"
+          className="flex items-center justify-between px-4 py-3 shadow-lg border-b border-white/10"
         >
-          <div className="flex items-center gap-3">
-            <span className="text-xl">🏥</span>
-            <span className="text-white font-semibold text-lg tracking-wide">
-              Clinical Delivery Command Center
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="text-xl flex-shrink-0">🏥</span>
+            <span className="text-white font-semibold text-sm sm:text-lg tracking-wide truncate">
+              <span className="hidden sm:inline">Clinical Delivery Command Center</span>
+              <span className="sm:hidden">Command Center</span>
             </span>
           </div>
           <div
-            className="text-sm font-medium"
+            className="text-xs sm:text-sm font-medium flex-shrink-0 ml-2"
             style={{ color: 'rgba(255,255,255,0.75)' }}
           >
-            Biometrics · LATAM 2026
+            <span className="hidden sm:inline">Biometrics · </span>LATAM 2026
           </div>
         </nav>
         <main>{children}</main>
